@@ -6,9 +6,10 @@ from tempfile import TemporaryFile
 from . import *
 # Program
 class FSPackerTest(unittest.TestCase):
+	data:Any
 	@classmethod
 	def setUpClass(self) -> None:
-		self.data:Any = (
+		self.data = (
 			None,
 			True,
 			False,

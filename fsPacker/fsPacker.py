@@ -53,7 +53,7 @@ def _create_vint(d:int) -> bytes:
 
 class FSPacker:
 	@classmethod
-	def dump(self, data:Any, fp:BytesIO) -> None:
+	def dump(self, data:Any, fp:IO[bytes]) -> None:
 		fp.write( self()._parse(data) )
 		return
 	@classmethod

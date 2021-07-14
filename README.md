@@ -1,5 +1,5 @@
 [![Python package](https://github.com/FusionSolutions/python-fspacker/actions/workflows/python-package.yml/badge.svg)](https://github.com/FusionSolutions/python-fspacker/actions/workflows/python-package.yml)
-# FS Message packer
+# Fusion Solutions message packer
 
 ## Introduction
 

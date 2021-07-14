@@ -20,6 +20,8 @@ class FSPackerTest(unittest.TestCase):
 			0.0,
 			0.1,
 			-0.1,
+			1.234e+16,
+			1.234e-16,
 			"",
 			"test",
 			"Ő",
@@ -38,6 +40,7 @@ class FSPackerTest(unittest.TestCase):
 		d:Any
 		for d in self.data:
 			self.assertEqual(loads(dumps( d )), d)
+		self.assertTupleEqual(loads(dumps( self.data )), self.data)
 		self.assertTupleEqual(loads(dumps( (self.data, self.data)) ), (self.data, self.data))
 		self.assertTupleEqual(loads(dumps( [self.data, self.data] )), (self.data, self.data))
 		self.assertDictEqual(loads(dumps( {"data":self.data} )), {"data":self.data})
@@ -60,5 +63,34 @@ class FSPackerTest(unittest.TestCase):
 		d = dumps(list(range(1024)))
 		with self.assertRaises(MaxDictProtection):
 			loads(d, maxDictSize=512)
-
+	def test_messagePackUnPack(self) -> None:
+		indicatorLength:int
+		messageLength:int
+		d:bytes = dumps(self.data)
+		packedMessage:bytes = packMessage(d)
+		indicatorLength, messageLength = unpackMessage(packedMessage)
+		self.assertEqual(indicatorLength, 1)
+		self.assertEqual(messageLength, len(d))
+		self.assertEqual(packedMessage[indicatorLength:], d)
+		#
+		packedMessage = packMessage(b"\x00"*0xFC)
+		indicatorLength, messageLength = unpackMessage(packedMessage)
+		self.assertEqual(indicatorLength, 1)
+		self.assertEqual(messageLength, 0xFC)
+		#
+		packedMessage = packMessage(b"\x00"*0xFD)
+		indicatorLength, messageLength = unpackMessage(packedMessage)
+		self.assertEqual(indicatorLength, 3)
+		self.assertEqual(messageLength, 0xFD)
+		#
+		packedMessage = packMessage(b"\x00"*0xFFFF)
+		indicatorLength, messageLength = unpackMessage(packedMessage)
+		self.assertEqual(indicatorLength, 3)
+		self.assertEqual(messageLength, 0xFFFF)
+		#
+		packedMessage = packMessage(b"\x00"*0xFFFFFF)
+		indicatorLength, messageLength = unpackMessage(packedMessage)
+		self.assertEqual(indicatorLength, 4)
+		self.assertEqual(messageLength, 0xFFFFFF)
+		#
 unittest.main(verbosity=2)

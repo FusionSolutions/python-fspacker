@@ -1,4 +1,4 @@
-FS message packer
+Fusion Solutions message packer
 Copyright (C) 2021 Fusion Solutions KFT <contact@fusionsolutions.io>
 
 This program is free software: you can redistribute it and/or modify

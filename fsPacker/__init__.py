@@ -1,4 +1,4 @@
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 __doc__ = """
 FS Message Packer v{}
 Copyright (C) 2021 Fusion Solutions KFT <contact@fusionsolutions.io>
@@ -17,7 +17,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/lgpl.txt>.
 """.format(__version__)
 from .fsPacker import (dump, dumps, load, loads, FSPackerError, UnsupportedType, UnsupportedVersion, InvalidOP,
-	MaxDictProtection, MaxOPProtection, OutOfData)
+	MaxDictProtection, MaxOPProtection, OutOfData, packMessage, unpackMessage)
 
 __all__ = ("dump", "dumps", "load", "loads", "FSPackerError", "UnsupportedType", "UnsupportedVersion", "InvalidOP",
-	"MaxDictProtection", "MaxOPProtection", "OutOfData")
+	"MaxDictProtection", "MaxOPProtection", "OutOfData", "packMessage", "unpackMessage")

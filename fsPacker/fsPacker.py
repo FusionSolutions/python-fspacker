@@ -2,7 +2,7 @@
 from __future__ import annotations
 from io import BytesIO
 from math import ceil
-from typing import Dict, Any, List, Tuple, Union, IO
+from typing import Dict, Any, List, Tuple, IO
 # Third party modules
 # Local modules
 # Program

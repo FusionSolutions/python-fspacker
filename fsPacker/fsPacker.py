@@ -2,7 +2,7 @@
 from __future__ import annotations
 from io import BytesIO
 from math import ceil
-from typing import Any, Union, IO
+from typing import Dict, Any, List, Tuple, Union, IO
 # Third party modules
 # Local modules
 # Program
@@ -41,6 +41,30 @@ class MaxOPProtection(FSPackerError): pass
 
 class OutOfData(FSPackerError): pass
 
+def packMessage(message:bytes) -> bytes:
+	d:int = len(message)
+	if d < 0xFD:
+		return d.to_bytes(1, VAR_ENDIANNESS) + message
+	elif d <= 0xFFFF:
+		return b"\xFD" + d.to_bytes(2, VAR_ENDIANNESS) + message
+	elif d <= 0xFFFFFF:
+		return b"\xFE" + d.to_bytes(3, VAR_ENDIANNESS) + message
+	elif d <= 0xFFFFFFFF:
+		return b"\xFF" + d.to_bytes(4, VAR_ENDIANNESS) + message
+	raise RuntimeError("Too big data to pack")
+
+def unpackMessage(buffer:bytes) -> Tuple[int, int]:
+	d:int = buffer[0]
+	if d < 0xFD:
+		return 1, d
+	elif d == 0xFD:
+		return 3, int.from_bytes(buffer[1:3], VAR_ENDIANNESS)
+	elif d == 0xFE:
+		return 4, int.from_bytes(buffer[1:4], VAR_ENDIANNESS)
+	elif d == 0xFF:
+		return 5, int.from_bytes(buffer[1:5], VAR_ENDIANNESS)
+	return 0, 0
+
 def _create_vint(d:int) -> bytes:
 	if d < 0xEC:
 		return d.to_bytes(1, VAR_ENDIANNESS)
@@ -52,6 +76,11 @@ def _create_vint(d:int) -> bytes:
 		return b"\xEE" + d.to_bytes(8, VAR_ENDIANNESS)
 
 class FSPacker:
+	def __init__(self) -> None:
+		self.dictCounter:int = 0
+		self.dictByKey:Dict[Any, int] = {}
+		self.dictBuffer:BytesIO = BytesIO()
+		self.opBuffer:BytesIO = BytesIO()
 	@classmethod
 	def dump(self, data:Any, fp:IO[bytes]) -> None:
 		fp.write( self()._parse(data) )
@@ -59,11 +88,6 @@ class FSPacker:
 	@classmethod
 	def dumps(self, data:Any) -> bytes:
 		return self()._parse(data)
-	def __init__(self):
-		self.dictCounter:int = 0
-		self.dictByKey:dict = {}
-		self.dictBuffer:BytesIO = BytesIO()
-		self.opBuffer:BytesIO = BytesIO()
 	def _parse(self, data:Any) -> bytes:
 		self._dump(data)
 		return VAR_VERSION + _create_vint(len(self.dictByKey)) + self.dictBuffer.getbuffer() + self.opBuffer.getbuffer()
@@ -149,7 +173,7 @@ class FSPacker:
 			self.dictCounter += 1
 		return self.dictByKey[k]
 
-class FSUnPacker:
+class FSUnpacker:
 	@classmethod
 	def load(self, data:IO[bytes], maxDictSize:int=0, maxOPSize:int=0) -> Any:
 		return self(BytesIO(data.read()), maxDictSize, maxOPSize)._parse()
@@ -157,7 +181,7 @@ class FSUnPacker:
 	def loads(self, data:bytes, maxDictSize:int=0, maxOPSize:int=0) -> Any:
 		return self(BytesIO(data), maxDictSize, maxOPSize)._parse()
 	def __init__(self, buffer:BytesIO, maxDictSize:int=0, maxOPSize:int=0):
-		self.dict:list = []
+		self.dict:List[Any] = []
 		self.buffer:BytesIO = buffer
 		self.maxDictSize:int = maxDictSize
 		self.maxOPSize:int = maxOPSize
@@ -246,5 +270,5 @@ class FSUnPacker:
 
 dump = FSPacker.dump
 dumps = FSPacker.dumps
-load = FSUnPacker.load
-loads = FSUnPacker.loads
+load = FSUnpacker.load
+loads = FSUnpacker.loads

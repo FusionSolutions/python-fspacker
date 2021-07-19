@@ -26,7 +26,6 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m fsPacker
         pip install build
     - name: Build package
       run: python -m build
@@ -35,4 +34,3 @@ jobs:
       with:
         user: __token__
         password: ${{ secrets.PYPI_API_TOKEN }}
-

@@ -2,8 +2,10 @@
 import unittest
 from typing import Any
 from tempfile import TemporaryFile
+# Third party modules
 # Local modules
-from . import *
+from .. import (dump, dumps, load, loads, UnsupportedVersion, MaxDictProtection, MaxOPProtection, OutOfData, packMessage,
+unpackMessage)
 # Program
 class FSPackerTest(unittest.TestCase):
 	data:Any
@@ -34,6 +36,7 @@ class FSPackerTest(unittest.TestCase):
 			{"data":"ok"},
 			{1:1},
 			{(1,2,3):1},
+			{1, "a", b"b"},
 		)
 		return None
 	def test_dumpsAndLoads(self) -> None:
@@ -63,6 +66,7 @@ class FSPackerTest(unittest.TestCase):
 		d = dumps(list(range(1024)))
 		with self.assertRaises(MaxDictProtection):
 			loads(d, maxDictSize=512)
+		return None
 	def test_messagePackUnPack(self) -> None:
 		indicatorLength:int
 		messageLength:int
@@ -93,4 +97,4 @@ class FSPackerTest(unittest.TestCase):
 		self.assertEqual(indicatorLength, 4)
 		self.assertEqual(messageLength, 0xFFFFFF)
 		#
-unittest.main(verbosity=2)
+		return None

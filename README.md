@@ -16,6 +16,7 @@ The following types are supported for packing and unpacking:
  - `list` (during unpacking it will be converted to `tuple`)
  - `tuple`
  - `dict` (dict key type can be any from this list)
+ - `set` (full support)
 
 ## Installation
 
@@ -57,42 +58,42 @@ $/python-fspacker: python3 -m benchmark
 Test data one [1 times]
   pickle
     dump size:    369436 byte
-    dump : best: 0.00192141 <- median: 0.00303648 - average: 0.00289015 -> worst: 0.00357831
-    loads: best: 0.00176141 <- median: 0.00193337 - average: 0.00192555 -> worst: 0.00245063
+    dump : best: 0.00158157 <- median: 0.00163573 - average: 0.00164407 -> worst: 0.00173204
+    loads: best: 0.00157589 <- median: 0.00160991 - average: 0.00162757 -> worst: 0.00216137
   marshal
     dump size:    474624 byte
-    dump : best: 0.00091804 <- median: 0.00146398 - average: 0.00146232 -> worst: 0.00209858
-    loads: best: 0.00144557 <- median: 0.00150470 - average: 0.00159074 -> worst: 0.00230714
+    dump : best: 0.00084558 <- median: 0.00089093 - average: 0.00089481 -> worst: 0.00096658
+    loads: best: 0.00135764 <- median: 0.00137184 - average: 0.00138647 -> worst: 0.00170787
   FSPacker
-    dump size:    329289 byte
-    dump : best: 0.02956123 <- median: 0.03191117 - average: 0.03488318 -> worst: 0.06962921
-    loads: best: 0.02214191 <- median: 0.02311805 - average: 0.02343034 -> worst: 0.02914553
+    dump size:    329293 byte
+    dump : best: 0.03001423 <- median: 0.03062541 - average: 0.03170544 -> worst: 0.04718978
+    loads: best: 0.02231823 <- median: 0.02331613 - average: 0.02334542 -> worst: 0.02514797
 Test data two [1 times]
   pickle
     dump size:    274491 byte
-    dump : best: 0.00102806 <- median: 0.00109109 - average: 0.00112886 -> worst: 0.00150502
-    loads: best: 0.00137711 <- median: 0.00147515 - average: 0.00148870 -> worst: 0.00195776
+    dump : best: 0.00107667 <- median: 0.00108967 - average: 0.00110260 -> worst: 0.00119756
+    loads: best: 0.00145767 <- median: 0.00148819 - average: 0.00150257 -> worst: 0.00176494
   marshal
     dump size:    360242 byte
-    dump : best: 0.00073095 <- median: 0.00080529 - average: 0.00079686 -> worst: 0.00087429
-    loads: best: 0.00122311 <- median: 0.00139272 - average: 0.00154981 -> worst: 0.00244541
+    dump : best: 0.00077111 <- median: 0.00081842 - average: 0.00099891 -> worst: 0.00156944
+    loads: best: 0.00127497 <- median: 0.00128988 - average: 0.00141144 -> worst: 0.00256521
   FSPacker
-    dump size:    238495 byte
-    dump : best: 0.02812932 <- median: 0.02927591 - average: 0.03252403 -> worst: 0.06384002
-    loads: best: 0.02134671 <- median: 0.02191628 - average: 0.02265632 -> worst: 0.03327830
+    dump size:    238499 byte
+    dump : best: 0.02852817 <- median: 0.02961052 - average: 0.03016038 -> worst: 0.03880055
+    loads: best: 0.02128199 <- median: 0.02241915 - average: 0.02516957 -> worst: 0.03794705
 Test data three [1000 times]
   pickle
     dump size:        97 byte
-    dump : best: 0.00065989 <- median: 0.00066162 - average: 0.00066534 -> worst: 0.00073160
-    loads: best: 0.00080160 <- median: 0.00080605 - average: 0.00080777 -> worst: 0.00084383
+    dump : best: 0.00066121 <- median: 0.00067347 - average: 0.00067562 -> worst: 0.00069691
+    loads: best: 0.00081164 <- median: 0.00081801 - average: 0.00082066 -> worst: 0.00083911
   marshal
     dump size:        79 byte
-    dump : best: 0.00061424 <- median: 0.00061704 - average: 0.00061919 -> worst: 0.00063762
-    loads: best: 0.00080728 <- median: 0.00081835 - average: 0.00082229 -> worst: 0.00090104
+    dump : best: 0.00061814 <- median: 0.00062130 - average: 0.00062324 -> worst: 0.00063816
+    loads: best: 0.00083109 <- median: 0.00083498 - average: 0.00084022 -> worst: 0.00088368
   FSPacker
     dump size:        85 byte
-    dump : best: 0.01630956 <- median: 0.01642815 - average: 0.01642205 -> worst: 0.01668519
-    loads: best: 0.01521912 <- median: 0.01530806 - average: 0.01553064 -> worst: 0.02047744
+    dump : best: 0.01618888 <- median: 0.01634808 - average: 0.01681845 -> worst: 0.02476933
+    loads: best: 0.01527784 <- median: 0.01556471 - average: 0.01594638 -> worst: 0.02066095
 ```
 ## Contribution
 

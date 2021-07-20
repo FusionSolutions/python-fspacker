@@ -6,7 +6,7 @@ from statistics import median
 import fsPacker
 # Local modules
 # Program
-def benchmark(dumpFn, loadsFn, data, name, counter=1000, repeat=4):
+def benchmark(dumpFn, loadsFn, data, name, counter=1000, repeat=4) -> None:
 	print("  {}".format(name))
 	q = dumpFn(data)
 	print("    dump size: {:>9} byte".format(len(q)))
@@ -14,6 +14,7 @@ def benchmark(dumpFn, loadsFn, data, name, counter=1000, repeat=4):
 	print("    dump : best: {:.8F} <- median: {:.8F} - average: {:.8F} -> worst: {:.8F}".format( min(res), median(res), sum(res)/repeat, max(res)))
 	res = timeit.repeat("fn(data)", number=counter, repeat=repeat, globals={"fn":loadsFn, "data":q})
 	print("    loads: best: {:.8F} <- median: {:.8F} - average: {:.8F} -> worst: {:.8F}".format( min(res), median(res), sum(res)/repeat, max(res)))
+	return None
 
 print("Test data one [1 times]")
 testData1 = pickle.loads(zlib.decompress(open("{}/testData1.dat".format(dirname(__file__)), 'rb').read()))

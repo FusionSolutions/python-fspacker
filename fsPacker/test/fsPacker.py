@@ -10,8 +10,8 @@ unpackMessage)
 class FSPackerTest(unittest.TestCase):
 	data:Any
 	@classmethod
-	def setUpClass(self) -> None:
-		self.data = (
+	def setUpClass(cls) -> None:
+		cls.data = (
 			None,
 			True,
 			False,

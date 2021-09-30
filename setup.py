@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, shutil
+import os
 import fsPacker
 try:
 	from setuptools import setup
@@ -13,7 +13,7 @@ setup(
 	version = fsPacker.__version__,
 	description = "Fusion Solutions message packer",
 	keywords = "message pack packer utility fusion solutions fusionsolutions",
-	author = "Andor `iFA88` Rajci - Fusions Solutions KFT",
+	author = "Andor `iFA` Rajci - Fusions Solutions KFT",
 	author_email = "ifa@fusionsolutions.io",
 	url = "https://github.com/FusionSolutions/python-fspacker",
 	license = "GPL-3",

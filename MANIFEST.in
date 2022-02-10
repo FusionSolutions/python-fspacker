@@ -1,1 +1,1 @@
-recursive-include fsPacker *.py *.pyi *.so
+recursive-include fsPacker *.py *.pyi *.cpp *.h

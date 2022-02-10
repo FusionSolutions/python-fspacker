@@ -21,7 +21,7 @@ pwd = os.path.abspath(os.path.dirname(__file__))
 
 setup(
 	name                          = "python-fspacker",
-	version                       = "0.2.4",
+	version                       = "0.2.5",
 	description                   = "Fusion Solutions message packer",
 	keywords                      = "message pack packer utility fusion solutions fusionsolutions",
 	author                        = "Andor `iFA` Rajci - Fusions Solutions KFT",
@@ -36,7 +36,7 @@ setup(
 	python_requires               = ">=3.8.0",
 	install_requires              = ["Cython"],
 	test_suite                    = "fsPacker.test",
-	package_data                  = { "":["py.typed", "_fspacker.pyi"] },
+	package_data                  = { "":["py.typed"] },
 	classifiers                   = [ # https://pypi.org/pypi?%3Aaction=list_classifiers
 		"Development Status :: 4 - Beta",
 		"Topic :: Utilities",

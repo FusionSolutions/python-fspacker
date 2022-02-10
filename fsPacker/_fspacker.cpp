@@ -1510,10 +1510,7 @@ static PyObject* _fspacker_unpacker_ver1_tuple(unpackerObject_ver1 *self) {
 		if ( value == NULL ) {
 			goto error;
 		}
-		if ( PyTuple_SET_ITEM(ret, i, value) < 0 ) {
-			PyErr_SetNone(PyExc_RuntimeError);
-			goto error;
-		}
+		PyTuple_SET_ITEM(ret, i, value);
 		value = NULL;
 	}
 	#if defined(FSPACKER_DEBUG)
@@ -1828,9 +1825,7 @@ Py_ssize_t maxOPSize) {
 			if ( item == NULL ) {
 				goto error;
 			}
-			if ( PyTuple_SET_ITEM(unpacker.memo, i, item) < 0 ) {
-				goto error;
-			}
+			PyTuple_SET_ITEM(unpacker.memo, i, item);
 			#if defined(FSPACKER_DEBUG)
 				printf("Index parsed #%lu [%ld]\n", i, (Py_ssize_t)item);
 			#endif
@@ -2795,10 +2790,7 @@ static PyObject* _fspacker_unpacker_ver2_tuple(unpackerObject_ver2 *self) {
 		#if defined(FSPACKER_DEBUG)
 			printf("Tuple item #%ld unpacked\n", i);
 		#endif
-		if ( PyTuple_SET_ITEM(ret, i, value) < 0 ) {
-			PyErr_SetNone(PyExc_RuntimeError);
-			goto error;
-		}
+		PyTuple_SET_ITEM(ret, i, value);
 		value = NULL;
 	}
 	self->stack--;

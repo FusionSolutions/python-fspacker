@@ -4,23 +4,23 @@
 ## Introduction
 
 Message packer for socket communications.
-Pure-Python implementation and it is [*much slower*](#benchmark) as `pickle`, `marshal` or even `json`, but much safer for production.
+Pure-Python implementation and it is [*slightly slower*](#benchmark) as `pickle`, `marshal` or even `json`, but much safer for production.
 The following types are supported for packing and unpacking:
  - `None`
- - `bool`
+ - Booleans: `True` and `False`
  - `int`
- - `float`
- - `string`
+ - Floats: `float`, `inf` and `-inf`
+ - `str`
  - `bytearray` (during unpacking it will be converted to `bytes`)
  - `bytes`
  - `list` (during unpacking it will be converted to `tuple`)
  - `tuple`
  - `dict` (dict key type can be any from this list)
- - `set` (full support)
+ - `set`
 
 ## Installation
 
-Requires python version 3.7 or later.
+Requires python version 3.8 or later.
 
 To install the latest release on [PyPI](https://pypi.org/project/python-fspacker/),
 simply run:
@@ -55,45 +55,109 @@ print( fsPacker.loads(data) )
 Environment: Intel(R) Xeon(R) CPU E5-1650 v4 @ 3.60GHz, DIMM DDR4 Synchronous Registered (Buffered) 2133 MHz
 ```shell
 $/python-fspacker: python3 -m benchmark
-Test data one [1 times]
+Batch 1# started
   pickle
-    dump size:    369436 byte
-    dump : best: 0.00158157 <- median: 0.00163573 - average: 0.00164407 -> worst: 0.00173204
-    loads: best: 0.00157589 <- median: 0.00160991 - average: 0.00162757 -> worst: 0.00216137
+    packed data size:    369436 byte
+    dump : best: 0.00097681 <- median avg: 0.00097981 - average: 0.00098675 -> worst: 0.00115466
+    loads: best: 0.00116250 <- median avg: 0.00116567 - average: 0.00116768 -> worst: 0.00123618
   marshal
-    dump size:    474624 byte
-    dump : best: 0.00084558 <- median: 0.00089093 - average: 0.00089481 -> worst: 0.00096658
-    loads: best: 0.00135764 <- median: 0.00137184 - average: 0.00138647 -> worst: 0.00170787
-  FSPacker
-    dump size:    329293 byte
-    dump : best: 0.03001423 <- median: 0.03062541 - average: 0.03170544 -> worst: 0.04718978
-    loads: best: 0.02231823 <- median: 0.02331613 - average: 0.02334542 -> worst: 0.02514797
-Test data two [1 times]
+    packed data size:    474624 byte
+    dump : best: 0.00060849 <- median avg: 0.00060978 - average: 0.00061214 -> worst: 0.00066010
+    loads: best: 0.00093875 <- median avg: 0.00094239 - average: 0.00094469 -> worst: 0.00099110
+  FSPacker version 1
+    packed data size:    348332 byte
+    dump : best: 0.00140599 <- median avg: 0.00142470 - average: 0.00143550 -> worst: 0.00179069
+    loads: best: 0.00092720 <- median avg: 0.00108024 - average: 0.00107529 -> worst: 0.00113729
+  FSPacker PURE PYTHON version 1
+    packed data size:    329293 byte
+    dump : best: 0.02668814 <- median avg: 0.02687568 - average: 0.02691436 -> worst: 0.02727839
+    loads: best: 0.02563514 <- median avg: 0.02585654 - average: 0.02623195 -> worst: 0.02991657
+  FSPacker version 2
+    packed data size:    324346 byte
+    dump : best: 0.00133745 <- median avg: 0.00135156 - average: 0.00136461 -> worst: 0.00155367
+    loads: best: 0.00094138 <- median avg: 0.00107694 - average: 0.00107477 -> worst: 0.00114164
+  FSPacker PURE PYTHON version 2
+    packed data size:    314318 byte
+    dump : best: 0.02291694 <- median avg: 0.02304409 - average: 0.02304181 -> worst: 0.02318106
+    loads: best: 0.02749131 <- median avg: 0.02768044 - average: 0.02768100 -> worst: 0.02799873
+
+Batch 2# started
   pickle
-    dump size:    274491 byte
-    dump : best: 0.00107667 <- median: 0.00108967 - average: 0.00110260 -> worst: 0.00119756
-    loads: best: 0.00145767 <- median: 0.00148819 - average: 0.00150257 -> worst: 0.00176494
+    packed data size:    274491 byte
+    dump : best: 0.00084737 <- median avg: 0.00085283 - average: 0.00085566 -> worst: 0.00091460
+    loads: best: 0.00100438 <- median avg: 0.00101581 - average: 0.00101901 -> worst: 0.00110241
   marshal
-    dump size:    360242 byte
-    dump : best: 0.00077111 <- median: 0.00081842 - average: 0.00099891 -> worst: 0.00156944
-    loads: best: 0.00127497 <- median: 0.00128988 - average: 0.00141144 -> worst: 0.00256521
-  FSPacker
-    dump size:    238499 byte
-    dump : best: 0.02852817 <- median: 0.02961052 - average: 0.03016038 -> worst: 0.03880055
-    loads: best: 0.02128199 <- median: 0.02241915 - average: 0.02516957 -> worst: 0.03794705
-Test data three [1000 times]
+    packed data size:    360242 byte
+    dump : best: 0.00051488 <- median avg: 0.00051733 - average: 0.00051980 -> worst: 0.00054507
+    loads: best: 0.00083179 <- median avg: 0.00083660 - average: 0.00084212 -> worst: 0.00090665
+  FSPacker version 1
+    packed data size:    271694 byte
+    dump : best: 0.00146050 <- median avg: 0.00147431 - average: 0.00147690 -> worst: 0.00153197
+    loads: best: 0.00092286 <- median avg: 0.00100156 - average: 0.00099671 -> worst: 0.00102327
+  FSPacker PURE PYTHON version 1
+    packed data size:    238499 byte
+    dump : best: 0.02538159 <- median avg: 0.02551851 - average: 0.02557210 -> worst: 0.02591332
+    loads: best: 0.02445310 <- median avg: 0.02459201 - average: 0.02464271 -> worst: 0.02524533
+  FSPacker version 2
+    packed data size:    238735 byte
+    dump : best: 0.00135346 <- median avg: 0.00136909 - average: 0.00137037 -> worst: 0.00141406
+    loads: best: 0.00090187 <- median avg: 0.00100334 - average: 0.00101569 -> worst: 0.00130636
+  FSPacker PURE PYTHON version 2
+    packed data size:    221546 byte
+    dump : best: 0.02124800 <- median avg: 0.02136108 - average: 0.02141090 -> worst: 0.02174148
+    loads: best: 0.02539373 <- median avg: 0.02556542 - average: 0.02576320 -> worst: 0.02921140
+
+Batch 3# started
   pickle
-    dump size:        97 byte
-    dump : best: 0.00066121 <- median: 0.00067347 - average: 0.00067562 -> worst: 0.00069691
-    loads: best: 0.00081164 <- median: 0.00081801 - average: 0.00082066 -> worst: 0.00083911
+    packed data size:    274511 byte
+    dump : best: 0.00087786 <- median avg: 0.00088081 - average: 0.00088287 -> worst: 0.00093917
+    loads: best: 0.00098829 <- median avg: 0.00099558 - average: 0.00099822 -> worst: 0.00105612
   marshal
-    dump size:        79 byte
-    dump : best: 0.00061814 <- median: 0.00062130 - average: 0.00062324 -> worst: 0.00063816
-    loads: best: 0.00083109 <- median: 0.00083498 - average: 0.00084022 -> worst: 0.00088368
-  FSPacker
-    dump size:        85 byte
-    dump : best: 0.01618888 <- median: 0.01634808 - average: 0.01681845 -> worst: 0.02476933
-    loads: best: 0.01527784 <- median: 0.01556471 - average: 0.01594638 -> worst: 0.02066095
+    packed data size:    360267 byte
+    dump : best: 0.00051608 <- median avg: 0.00051854 - average: 0.00051974 -> worst: 0.00054176
+    loads: best: 0.00082532 <- median avg: 0.00082907 - average: 0.00083079 -> worst: 0.00085855
+  FSPacker version 1
+    packed data size:    414729 byte
+    dump : best: 0.00300953 <- median avg: 0.00304670 - average: 0.00307232 -> worst: 0.00353145
+    loads: best: 0.00209713 <- median avg: 0.00237827 - average: 0.00240026 -> worst: 0.00317319
+  FSPacker PURE PYTHON version 1
+    packed data size:    365886 byte
+    dump : best: 0.06813255 <- median avg: 0.06852698 - average: 0.06859602 -> worst: 0.06918136
+    loads: best: 0.06472549 <- median avg: 0.06544865 - average: 0.06549210 -> worst: 0.06638827
+  FSPacker version 2
+    packed data size:    381787 byte
+    dump : best: 0.00308844 <- median avg: 0.00310415 - average: 0.00311051 -> worst: 0.00318295
+    loads: best: 0.00206454 <- median avg: 0.00235557 - average: 0.00234600 -> worst: 0.00239830
+  FSPacker PURE PYTHON version 2
+    packed data size:    348954 byte
+    dump : best: 0.06123471 <- median avg: 0.06176491 - average: 0.06173875 -> worst: 0.06195223
+    loads: best: 0.07077837 <- median avg: 0.07135906 - average: 0.07146089 -> worst: 0.07298397
+
+Batch 4# started
+  pickle
+    packed data size:        97 byte
+    dump : best: 0.00055353 <- median avg: 0.00056210 - average: 0.00056276 -> worst: 0.00057487
+    loads: best: 0.00064643 <- median avg: 0.00065715 - average: 0.00065725 -> worst: 0.00066493
+  marshal
+    packed data size:        79 byte
+    dump : best: 0.00047902 <- median avg: 0.00048745 - average: 0.00048688 -> worst: 0.00049302
+    loads: best: 0.00058795 <- median avg: 0.00059175 - average: 0.00059234 -> worst: 0.00060103
+  FSPacker version 1
+    packed data size:        85 byte
+    dump : best: 0.00077319 <- median avg: 0.00078550 - average: 0.00078805 -> worst: 0.00080470
+    loads: best: 0.00068854 <- median avg: 0.00076246 - average: 0.00075894 -> worst: 0.00078787
+  FSPacker PURE PYTHON version 1
+    packed data size:        85 byte
+    dump : best: 0.01360374 <- median avg: 0.01369004 - average: 0.01373398 -> worst: 0.01407292
+    loads: best: 0.01672420 <- median avg: 0.01689699 - average: 0.01688315 -> worst: 0.01702459
+  FSPacker version 2
+    packed data size:        74 byte
+    dump : best: 0.00075289 <- median avg: 0.00076416 - average: 0.00076328 -> worst: 0.00077514
+    loads: best: 0.00053710 <- median avg: 0.00055360 - average: 0.00055652 -> worst: 0.00058802
+  FSPacker PURE PYTHON version 2
+    packed data size:        74 byte
+    dump : best: 0.00831298 <- median avg: 0.00834915 - average: 0.00835809 -> worst: 0.00851608
+    loads: best: 0.01466914 <- median avg: 0.01474124 - average: 0.01477603 -> worst: 0.01507150
 ```
 ## Contribution
 

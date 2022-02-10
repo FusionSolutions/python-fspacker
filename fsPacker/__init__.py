@@ -1,4 +1,4 @@
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 __doc__ = """
 FS Message Packer v{}
 Copyright (C) 2021 Fusion Solutions KFT <contact@fusionsolutions.io>
@@ -16,8 +16,14 @@ GNU General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/lgpl.txt>.
 """.format(__version__)
-from .fsPacker import (dump, dumps, load, loads, FSPackerError, UnsupportedType, UnsupportedVersion, InvalidOP,
-	MaxDictProtection, MaxOPProtection, OutOfData, packMessage, unpackMessage)
+try:
+	ACCELERATION_IS_AVAILABLE = True
+	from ._fspacker import load, loads, dump, dumps, PackerError, PackingError, UnpackingError
+except ImportError:
+	ACCELERATION_IS_AVAILABLE = False
+	from .fallback import load, loads, dump, dumps, PackerError, PackingError, UnpackingError # type: ignore
 
-__all__ = ("dump", "dumps", "load", "loads", "FSPackerError", "UnsupportedType", "UnsupportedVersion", "InvalidOP",
-	"MaxDictProtection", "MaxOPProtection", "OutOfData", "packMessage", "unpackMessage")
+from .fallback import HIGHEST_VERSION
+
+__all__ = ("dump", "dumps", "load", "loads", "PackerError", "PackingError", "UnpackingError", "HIGHEST_VERSION",
+"ACCELERATION_IS_AVAILABLE")

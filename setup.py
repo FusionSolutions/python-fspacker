@@ -21,7 +21,7 @@ pwd = os.path.abspath(os.path.dirname(__file__))
 
 setup(
 	name                          = "python-fspacker",
-	version                       = "0.2.3",
+	version                       = "0.2.4",
 	description                   = "Fusion Solutions message packer",
 	keywords                      = "message pack packer utility fusion solutions fusionsolutions",
 	author                        = "Andor `iFA` Rajci - Fusions Solutions KFT",
@@ -43,6 +43,7 @@ setup(
 		"Programming Language :: Python :: 3 :: Only",
 		"Programming Language :: Python :: 3.8",
 		"Programming Language :: Python :: 3.9",
+		"Programming Language :: Python :: 3.10",
 		"License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
 	],
 )

@@ -27,7 +27,7 @@ _fspacker_dumps(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
 {
     PyObject *return_value = NULL;
     static const char * const _keywords[] = {"", "version", "recursiveLimit", NULL};
-    static _PyArg_Parser _parser = {NULL, _keywords, "dumps", 0};
+    static _PyArg_Parser _parser = {NULL, _keywords, "dumps", 0, 0, 0, 0, 0, 0};
     PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *obj;
@@ -110,7 +110,7 @@ _fspacker_dump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
 {
     PyObject *return_value = NULL;
     static const char * const _keywords[] = {"", "", "version", "recursiveLimit", NULL};
-    static _PyArg_Parser _parser = {NULL, _keywords, "dump", 0};
+    static _PyArg_Parser _parser = {NULL, _keywords, "dump", 0, 0, 0, 0, 0, 0};
     PyObject *argsbuf[4];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
     PyObject *obj;
@@ -164,18 +164,13 @@ exit:
 }
 
 PyDoc_STRVAR(_fspacker_loads__doc__,
-"loads($module, obj, /, *, maxDictSize=0, maxOPSize=0, maxIndexSize=0,\n"
-"      recursiveLimit=512)\n"
+"loads($module, obj, /, *, maxIndexSize=0, recursiveLimit=512)\n"
 "--\n"
 "\n"
 "Unpack bytes.\n"
 "\n"
 "  obj\n"
 "    Object to pack\n"
-"  maxDictSize\n"
-"    Maximum dictonary size\n"
-"  maxOPSize\n"
-"    Maximum OP code length\n"
 "  maxIndexSize\n"
 "    Maximum index size\n"
 "  recursiveLimit\n"
@@ -185,21 +180,18 @@ PyDoc_STRVAR(_fspacker_loads__doc__,
     {"loads", (PyCFunction)(void(*)(void))_fspacker_loads, METH_FASTCALL|METH_KEYWORDS, _fspacker_loads__doc__},
 
 static PyObject *
-_fspacker_loads_impl(PyObject *module, PyObject *obj, Py_ssize_t maxDictSize,
-                     Py_ssize_t maxOPSize, Py_ssize_t maxIndexSize,
-                     Py_ssize_t recursiveLimit);
+_fspacker_loads_impl(PyObject *module, PyObject *obj,
+                     Py_ssize_t maxIndexSize, Py_ssize_t recursiveLimit);
 
 static PyObject *
 _fspacker_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
-    static const char * const _keywords[] = {"", "maxDictSize", "maxOPSize", "maxIndexSize", "recursiveLimit", NULL};
-    static _PyArg_Parser _parser = {NULL, _keywords, "loads", 0};
-    PyObject *argsbuf[5];
+    static const char * const _keywords[] = {"", "maxIndexSize", "recursiveLimit", NULL};
+    static _PyArg_Parser _parser = {NULL, _keywords, "loads", 0, 0, 0, 0, 0, 0};
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *obj;
-    Py_ssize_t maxDictSize = 0;
-    Py_ssize_t maxOPSize = 0;
     Py_ssize_t maxIndexSize = 0;
     Py_ssize_t recursiveLimit = 512;
 
@@ -222,40 +214,6 @@ _fspacker_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
             }
-            maxDictSize = ival;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (args[2]) {
-        {
-            Py_ssize_t ival = -1;
-            PyObject *iobj = PyNumber_Index(args[2]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
-            }
-            if (ival == -1 && PyErr_Occurred()) {
-                goto exit;
-            }
-            maxOPSize = ival;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (args[3]) {
-        {
-            Py_ssize_t ival = -1;
-            PyObject *iobj = PyNumber_Index(args[3]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
-            }
-            if (ival == -1 && PyErr_Occurred()) {
-                goto exit;
-            }
             maxIndexSize = ival;
         }
         if (!--noptargs) {
@@ -264,7 +222,7 @@ _fspacker_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = PyNumber_Index(args[4]);
+        PyObject *iobj = PyNumber_Index(args[2]);
         if (iobj != NULL) {
             ival = PyLong_AsSsize_t(iobj);
             Py_DECREF(iobj);
@@ -275,25 +233,20 @@ _fspacker_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
         recursiveLimit = ival;
     }
 skip_optional_kwonly:
-    return_value = _fspacker_loads_impl(module, obj, maxDictSize, maxOPSize, maxIndexSize, recursiveLimit);
+    return_value = _fspacker_loads_impl(module, obj, maxIndexSize, recursiveLimit);
 
 exit:
     return return_value;
 }
 
 PyDoc_STRVAR(_fspacker_load__doc__,
-"load($module, file, /, *, maxDictSize=0, maxOPSize=0, maxIndexSize=0,\n"
-"     recursiveLimit=512)\n"
+"load($module, file, /, *, maxIndexSize=0, recursiveLimit=512)\n"
 "--\n"
 "\n"
 "Unpack bytes.\n"
 "\n"
 "  file\n"
 "    Readable file stream in byte mode\n"
-"  maxDictSize\n"
-"    Maximum dictonary size\n"
-"  maxOPSize\n"
-"    Maximum OP code length\n"
 "  maxIndexSize\n"
 "    Maximum index size\n"
 "  recursiveLimit\n"
@@ -304,20 +257,17 @@ PyDoc_STRVAR(_fspacker_load__doc__,
 
 static PyObject *
 _fspacker_load_impl(PyObject *module, PyObject *stream,
-                    Py_ssize_t maxDictSize, Py_ssize_t maxOPSize,
                     Py_ssize_t maxIndexSize, Py_ssize_t recursiveLimit);
 
 static PyObject *
 _fspacker_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     PyObject *return_value = NULL;
-    static const char * const _keywords[] = {"", "maxDictSize", "maxOPSize", "maxIndexSize", "recursiveLimit", NULL};
-    static _PyArg_Parser _parser = {NULL, _keywords, "load", 0};
-    PyObject *argsbuf[5];
+    static const char * const _keywords[] = {"", "maxIndexSize", "recursiveLimit", NULL};
+    static _PyArg_Parser _parser = {NULL, _keywords, "load", 0, 0, 0, 0, 0, 0};
+    PyObject *argsbuf[3];
     Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
     PyObject *stream;
-    Py_ssize_t maxDictSize = 0;
-    Py_ssize_t maxOPSize = 0;
     Py_ssize_t maxIndexSize = 0;
     Py_ssize_t recursiveLimit = 512;
 
@@ -340,40 +290,6 @@ _fspacker_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
             }
-            maxDictSize = ival;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (args[2]) {
-        {
-            Py_ssize_t ival = -1;
-            PyObject *iobj = PyNumber_Index(args[2]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
-            }
-            if (ival == -1 && PyErr_Occurred()) {
-                goto exit;
-            }
-            maxOPSize = ival;
-        }
-        if (!--noptargs) {
-            goto skip_optional_kwonly;
-        }
-    }
-    if (args[3]) {
-        {
-            Py_ssize_t ival = -1;
-            PyObject *iobj = PyNumber_Index(args[3]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
-            }
-            if (ival == -1 && PyErr_Occurred()) {
-                goto exit;
-            }
             maxIndexSize = ival;
         }
         if (!--noptargs) {
@@ -382,7 +298,7 @@ _fspacker_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = PyNumber_Index(args[4]);
+        PyObject *iobj = PyNumber_Index(args[2]);
         if (iobj != NULL) {
             ival = PyLong_AsSsize_t(iobj);
             Py_DECREF(iobj);
@@ -393,9 +309,9 @@ _fspacker_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
         recursiveLimit = ival;
     }
 skip_optional_kwonly:
-    return_value = _fspacker_load_impl(module, stream, maxDictSize, maxOPSize, maxIndexSize, recursiveLimit);
+    return_value = _fspacker_load_impl(module, stream, maxIndexSize, recursiveLimit);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=2092bf95b8d54973 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5a8d51595fe59862 input=a9049054013a1b77]*/

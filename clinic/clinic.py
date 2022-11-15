@@ -954,7 +954,7 @@ class CLanguage(Language):
                 argname_fmt = 'args[%d]'
                 declarations = normalize_snippet("""
                     static const char * const _keywords[] = {{{keywords} NULL}};
-                    static _PyArg_Parser _parser = {{NULL, _keywords, "{name}", 0}};
+                    static _PyArg_Parser _parser = {{NULL, _keywords, "{name}", 0, 0, 0, 0, 0, 0}};
                     PyObject *argsbuf[%s];
                     """ % len(converters))
                 if has_optional_kw:
@@ -973,7 +973,7 @@ class CLanguage(Language):
                 argname_fmt = 'fastargs[%d]'
                 declarations = normalize_snippet("""
                     static const char * const _keywords[] = {{{keywords} NULL}};
-                    static _PyArg_Parser _parser = {{NULL, _keywords, "{name}", 0}};
+                    static _PyArg_Parser _parser = {{NULL, _keywords, "{name}", 0, 0, 0, 0, 0, 0}};
                     PyObject *argsbuf[%s];
                     PyObject * const *fastargs;
                     Py_ssize_t nargs = PyTuple_GET_SIZE(args);

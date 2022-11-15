@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import os, sys
+import os, sys, platform
 from setuptools import setup # type: ignore
+from setuptools import Extension
 
 if sys.version_info[0] != 3:
 	raise RuntimeError("Python 3.x required")
@@ -13,15 +14,31 @@ except ImportError:
 
 ext_modules = None
 if have_cython:
-	ext_modules = cythonize(
-		"fsPacker/_fspacker.cpp",
-	)
+	EXTRA_LINK_ARGS = []
+	if platform.system() == 'Linux':
+	    EXTRA_LINK_ARGS += ['-Wl,--strip-all']
+	ext_modules = cythonize([Extension(
+		"fsPacker._fspacker",
+		sources=["fsPacker/_fspacker.cpp"],
+		language='c++',
+		extra_compile_args=[
+			'-std=c++17',
+			'-fPIC',
+			'-Os',
+			'-Wall',
+			'-Wextra',
+			'-Wconversion',
+			'-fno-strict-aliasing',
+			'-fno-rtti',
+		],
+		extra_link_args=EXTRA_LINK_ARGS,
+	)])
 
 pwd = os.path.abspath(os.path.dirname(__file__))
 
 setup(
 	name                          = "python-fspacker",
-	version                       = "0.2.5",
+	version                       = "0.3.0",
 	description                   = "Fusion Solutions message packer",
 	keywords                      = "message pack packer utility fusion solutions fusionsolutions",
 	author                        = "Andor `iFA` Rajci - Fusions Solutions KFT",

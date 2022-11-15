@@ -1,4 +1,6 @@
 #include "Python.h"
+#include <vector>
+#include "_fspacker.h"
 #include "clinic/_fspacker.cpp.h"
 // CONSTANTS
 static const Py_ssize_t ITEM_LIMIT = 4294967295;
@@ -36,15 +38,7 @@ static PyMemoTable* PyMemoTable_New() {
 	PyErr_NoMemory();
 	return NULL;
 }
-static Py_ssize_t PyMemoTable_Size(PyMemoTable *self) {
-	return self->mt_used;
-}
 static void PyMemoTable_Clear(PyMemoTable *self) {
-	Py_ssize_t i = self->mt_allocated;
-
-	while (--i >= 0) {
-		Py_XDECREF(self->mt_table[i].me_key);
-	}
 	self->mt_used = 0;
 	memset(self->mt_table, 0, self->mt_allocated * sizeof(PyMemoEntry));
 }
@@ -141,7 +135,6 @@ static int PyMemoTable_Set(PyMemoTable *self, PyObject *key, Py_ssize_t value) {
 		entry->me_value = value;
 		return 0;
 	}
-	Py_INCREF(key);
 	entry->me_key = key;
 	entry->me_value = value;
 	self->mt_used++;
@@ -172,67 +165,6 @@ struct bufferObject {
 	size_t length;
 	size_t buf_size;
 };
-static PyObject* raw_unicode_escape(PyObject *obj) {
-	char *p;
-	Py_ssize_t i, size;
-	const void *data;
-	unsigned int kind;
-	_PyBytesWriter writer;
-	if (PyUnicode_READY(obj))
-		return NULL;
-	_PyBytesWriter_Init(&writer);
-	size = PyUnicode_GET_LENGTH(obj);
-	data = PyUnicode_DATA(obj);
-	kind = PyUnicode_KIND(obj);
-	p = (char*)_PyBytesWriter_Alloc(&writer, size);
-	if (p == NULL)
-		goto error;
-	writer.overallocate = 1;
-	for (i=0; i < size; i++) {
-		Py_UCS4 ch = PyUnicode_READ(kind, data, i);
-		/* Map 32-bit characters to '\Uxxxxxxxx' */
-		if (ch >= 0x10000) {
-			/* -1: subtract 1 preallocated byte */
-			p = (char*)_PyBytesWriter_Prepare(&writer, p, 10-1);
-			if (p == NULL)
-				goto error;
-			*p++ = '\\';
-			*p++ = 'U';
-			*p++ = Py_hexdigits[(ch >> 28) & 0xf];
-			*p++ = Py_hexdigits[(ch >> 24) & 0xf];
-			*p++ = Py_hexdigits[(ch >> 20) & 0xf];
-			*p++ = Py_hexdigits[(ch >> 16) & 0xf];
-			*p++ = Py_hexdigits[(ch >> 12) & 0xf];
-			*p++ = Py_hexdigits[(ch >> 8) & 0xf];
-			*p++ = Py_hexdigits[(ch >> 4) & 0xf];
-			*p++ = Py_hexdigits[ch & 15];
-		}
-		/* Map 16-bit characters, '\\' and '\n' to '\uxxxx' */
-		else if (ch >= 256 ||
-				 ch == '\\' || ch == 0 || ch == '\n' || ch == '\r' ||
-				 ch == 0x1a)
-		{
-			/* -1: subtract 1 preallocated byte */
-			p = (char*)_PyBytesWriter_Prepare(&writer, p, 6-1);
-			if (p == NULL)
-				goto error;
-			*p++ = '\\';
-			*p++ = 'u';
-			*p++ = Py_hexdigits[(ch >> 12) & 0xf];
-			*p++ = Py_hexdigits[(ch >> 8) & 0xf];
-			*p++ = Py_hexdigits[(ch >> 4) & 0xf];
-			*p++ = Py_hexdigits[ch & 15];
-		}
-		/* Copy everything else as-is */
-		else
-			*p++ = (char) ch;
-	}
-	return _PyBytesWriter_Finish(&writer, p);
-	error:
-		PyErr_NoMemory();
-		_PyBytesWriter_Dealloc(&writer);
-		return NULL;
-}
 static int __fspacker_buffer_append(bufferObject *b, const char *data, size_t l) {
 	char *buf = b->buf;
 	size_t bs = b->buf_size;
@@ -273,11 +205,11 @@ static PyObject* _fspacker_returnWithVersion(Py_ssize_t version, PyObject *ret) 
 	PyObject *pret = PyTuple_New(2);
 	PyObject *ver = PyLong_FromSsize_t(version);
 	if (PyTuple_SetItem(pret, 0, ver) == -1 || PyTuple_SetItem(pret, 1, ret) == -1) {
+		Py_DECREF(ver);
 		Py_DECREF(ret);
 		PyErr_NoMemory();
 		return NULL;
 	}
-	Py_INCREF(pret);
 	return pret;
 }
 
@@ -287,7 +219,7 @@ static struct PyMethodDef _fspacker_methods[] = {
 	_FSPACKER_DUMP_METHODDEF
 	_FSPACKER_LOADS_METHODDEF
 	_FSPACKER_LOAD_METHODDEF
-	{NULL, NULL} /* sentinel */
+	{NULL, NULL, 0, 0} /* sentinel */
 };
 struct FSPackerState {
 	PyObject *PackerError;
@@ -319,11 +251,11 @@ static int  _fspacker_clear(PyObject *m) {
 PyDoc_STRVAR(_fspacker_module_doc, "C implementation for the FSPacker module.");
 static struct PyModuleDef _fspackermodule = {
 	PyModuleDef_HEAD_INIT,
-	"_fspacker",            /* m_name */
+	"_fspacker",             /* m_name */
 	_fspacker_module_doc,    /* m_doc */
-	sizeof(FSPackerState),  /* m_size */
+	sizeof(FSPackerState),   /* m_size */
 	_fspacker_methods,       /* m_methods */
-	NULL,                 /* m_reload */
+	NULL,                    /* m_reload */
 	_fspacker_traverse,      /* m_traverse */
 	_fspacker_clear,         /* m_clear */
 	(freefunc)_fspacker_free /* m_free */
@@ -380,14 +312,6 @@ PyMODINIT_FUNC PyInit__fspacker(void) {
 	return NULL;
 }
 
-// ABSTRACT FUNCTIONS
-static PyObject* _fspacker_packer_ver1(FSPackerState *module, PyObject *obj, PyObject *stream, Py_ssize_t recursiveLimit);
-static PyObject* _fspacker_packer_ver2(FSPackerState *module, PyObject *obj, PyObject *stream, Py_ssize_t recursiveLimit);
-static PyObject* _fspacker_unpacker_ver1(FSPackerState *module, const char *input, Py_ssize_t len, Py_ssize_t maxDictSize,
-Py_ssize_t maxOPSize);
-static PyObject* _fspacker_unpacker_ver2(FSPackerState *module, const char *input, Py_ssize_t len, Py_ssize_t maxIndexSize,
-Py_ssize_t recursiveLimit);
-
 // EXPORTED FUNCTIONS
 /*[clinic input]
 _fspacker.dumps
@@ -404,18 +328,17 @@ Pack all supported variable type to bytes
 [clinic start generated code]*/
 
 static PyObject *
-_fspacker_dumps_impl(PyObject *module, PyObject *obj, Py_ssize_t version, Py_ssize_t recursiveLimit)
+_fspacker_dumps_impl(PyObject *module, PyObject *obj, Py_ssize_t version,
+                     Py_ssize_t recursiveLimit)
 /*[clinic end generated code: output=46ce5ee15b3a51d5 input=7ec1b9be2ca05d90]*/
 {
+	(void)module;
 	FSPackerState *FSPackerModule = _fspacker_GetGlobalState();
 	if ( recursiveLimit == 0 ) {
 		PyErr_SetString(FSPackerModule->PackingError, "Recursive limit is invalid");
 	}
-	if (version == 1) {
-		return _fspacker_packer_ver1(FSPackerModule, obj, NULL, recursiveLimit);
-	}
-	else if (version == 2) {
-		return _fspacker_packer_ver2(FSPackerModule, obj, NULL, recursiveLimit);
+	if (version == 2) {
+		return _fspacker_packer_ver2(obj, NULL, recursiveLimit);
 	}
 	PyErr_Format(FSPackerModule->PackingError, "Unsupported packer version: %d", version);
 	return NULL;
@@ -445,18 +368,17 @@ this interface.
 [clinic start generated code]*/
 
 static PyObject *
-_fspacker_dump_impl(PyObject *module, PyObject *obj, PyObject *file, Py_ssize_t version, Py_ssize_t recursiveLimit)
+_fspacker_dump_impl(PyObject *module, PyObject *obj, PyObject *file,
+                    Py_ssize_t version, Py_ssize_t recursiveLimit)
 /*[clinic end generated code: output=8a8f1ba5f527a131 input=a26e53750a541ec9]*/
 {
+	(void)module;
 	FSPackerState *FSPackerModule = _fspacker_GetGlobalState();
 	if ( recursiveLimit == 0 ) {
 		PyErr_SetString(FSPackerModule->PackingError, "Recursive limit is invalid");
 	}
-	if (version == 1) {
-		return _fspacker_packer_ver1(FSPackerModule, obj, file, recursiveLimit);
-	}
-	else if (version == 2) {
-		return _fspacker_packer_ver2(FSPackerModule, obj, file, recursiveLimit);
+	if (version == 2) {
+		return _fspacker_packer_ver2(obj, file, recursiveLimit);
 	}
 	PyErr_Format(FSPackerModule->PackingError, "Unsupported packer version: %d", version);
 	return NULL;
@@ -469,10 +391,6 @@ _fspacker.loads
     Object to pack
   /
   *
-  maxDictSize: Py_ssize_t = 0
-    Maximum dictonary size
-  maxOPSize: Py_ssize_t = 0
-    Maximum OP code length
   maxIndexSize: Py_ssize_t = 0
     Maximum index size
   recursiveLimit: Py_ssize_t = 512
@@ -482,10 +400,11 @@ Unpack bytes.
 [clinic start generated code]*/
 
 static PyObject *
-_fspacker_loads_impl(PyObject *module, PyObject *obj, Py_ssize_t maxDictSize, Py_ssize_t maxOPSize, Py_ssize_t maxIndexSize,
-Py_ssize_t recursiveLimit)
-/*[clinic end generated code: output=6d799aac8b73a7cb input=d1c2c890f32e0048]*/
+_fspacker_loads_impl(PyObject *module, PyObject *obj,
+                     Py_ssize_t maxIndexSize, Py_ssize_t recursiveLimit)
+/*[clinic end generated code: output=3f2c98315ce4c9d3 input=b8fa4cf530eb7a29]*/
 {
+	(void)module;
 	FSPackerState *FSPackerModule = _fspacker_GetGlobalState();
 	Py_ssize_t len;
 	if (!PyBytes_CheckExact(obj)) {
@@ -500,11 +419,8 @@ Py_ssize_t recursiveLimit)
 	}
 	const char *input = PyBytes_AS_STRING(obj);
 	uint8_t version = (uint8_t)input[0];
-	if (version == 0x01) {
-		return _fspacker_returnWithVersion(1, _fspacker_unpacker_ver1(FSPackerModule, input, len, maxDictSize, maxOPSize));
-	}
-	else if (version == 0x02) {
-		return _fspacker_returnWithVersion(2,_fspacker_unpacker_ver2(FSPackerModule, input, len, maxIndexSize, recursiveLimit));
+	if (version == 0x02) {
+		return _fspacker_returnWithVersion(2, _fspacker_unpacker_ver2(input, len, maxIndexSize, recursiveLimit));
 	}
 	else {
 		PyErr_Format(FSPackerModule->UnpackingError, "Unsupported packed version: %d", version);
@@ -519,10 +435,6 @@ _fspacker.load
     Readable file stream in byte mode
   /
   *
-  maxDictSize: Py_ssize_t = 0
-    Maximum dictonary size
-  maxOPSize: Py_ssize_t = 0
-    Maximum OP code length
   maxIndexSize: Py_ssize_t = 0
     Maximum index size
   recursiveLimit: Py_ssize_t = 512
@@ -532,10 +444,11 @@ Unpack bytes.
 [clinic start generated code]*/
 
 static PyObject *
-_fspacker_load_impl(PyObject *module, PyObject *stream, Py_ssize_t maxDictSize, Py_ssize_t maxOPSize, Py_ssize_t maxIndexSize,
-Py_ssize_t recursiveLimit)
-/*[clinic end generated code: output=14ce19cbdab24f93 input=f366515a0bc9c0ad]*/
+_fspacker_load_impl(PyObject *module, PyObject *stream,
+                    Py_ssize_t maxIndexSize, Py_ssize_t recursiveLimit)
+/*[clinic end generated code: output=8442d46cefe538dc input=7505c61f2bff2eed]*/
 {
+	(void)module;
 	FSPackerState *FSPackerModule = _fspacker_GetGlobalState();
 	PyObject *readMethod = NULL;
 	PyObject *obj = NULL;
@@ -575,14 +488,8 @@ Py_ssize_t recursiveLimit)
 	}
 	input = PyBytes_AS_STRING(obj);
 	version = (uint8_t)input[0];
-	if (version == 0x01) {
-		ret = _fspacker_returnWithVersion(1, _fspacker_unpacker_ver1(FSPackerModule, input, len, maxDictSize, maxOPSize));
-		Py_XDECREF(readMethod);
-		Py_XDECREF(obj);
-		return ret;
-	}
-	else if (version == 0x02) {
-		ret = _fspacker_returnWithVersion(2, _fspacker_unpacker_ver2(FSPackerModule, input, len, maxIndexSize, recursiveLimit));
+	if (version == 0x02) {
+		ret = _fspacker_returnWithVersion(2, _fspacker_unpacker_ver2(input, len, maxIndexSize, recursiveLimit));
 		Py_XDECREF(readMethod);
 		Py_XDECREF(obj);
 		return ret;
@@ -597,1274 +504,6 @@ Py_ssize_t recursiveLimit)
 	return NULL;
 }
 
-// ===== PROTOCOL VERSION 1 =====
-const uint8_t VER1_VINT_2BYTES      = 0xEA;
-const uint8_t VER1_VINT_3BYTES      = 0xEB;
-const uint8_t VER1_VINT_4BYTES      = 0xEC;
-const uint8_t VER1_OP_NONE          = 0xED;
-const uint8_t VER1_OP_BOOL_FALSE    = 0xEE;
-const uint8_t VER1_OP_BOOL_TRUE     = 0xEF;
-const uint8_t VER1_OP_INTERGER      = 0xF0;
-const uint8_t VER1_OP_NEG_INTERGER  = 0xF1;
-const uint8_t VER1_OP_ZERO_INTERGER = 0xF2;
-const uint8_t VER1_OP_FLOAT         = 0xF3;
-const uint8_t VER1_OP_NEG_FLOAT     = 0xF4;
-const uint8_t VER1_OP_ZERO_FLOAT    = 0xF5;
-const uint8_t VER1_OP_UNICODE       = 0xF6;
-const uint8_t VER1_OP_ZERO_UNICODE  = 0xF7;
-const uint8_t VER1_OP_BYTES         = 0xF8;
-const uint8_t VER1_OP_ZERO_BYTES    = 0xF9;
-const uint8_t VER1_OP_LIST          = 0xFA;
-const uint8_t VER1_OP_ZERO_LIST     = 0xFB;
-const uint8_t VER1_OP_DICT          = 0xFC;
-const uint8_t VER1_OP_ZERO_DICT     = 0xFD;
-const uint8_t VER1_OP_SET           = 0xFE;
-const uint8_t VER1_OP_ZERO_SET      = 0xFF;
-// ----- PACKER -----
-struct packerObject_ver1 {
-	bufferObject *opCodes;
-	bufferObject *data;
-	PyObject *stream;
-	PyMemoTable *memo;
-	FSPackerState *module;
-};
-// abstract
-static int _fspacker_packer_ver1_parser(packerObject_ver1 *self, PyObject *obj, int recursiveLimit);
-// misc
-static int _fspacker_packer_ver1_create_vin(char *trg, Py_ssize_t val) {
-	unsigned char buf[5];
-	size_t l = 1;
-	if (val < VER1_VINT_2BYTES) {
-		buf[0] = (unsigned char)(val & 0xff);
-	}
-	else if(val <= 0xFFFF) {
-		l = 3;
-		buf[0] = (unsigned char)VER1_VINT_2BYTES;
-		buf[1] = (unsigned char)(val & 0xff);
-		buf[2] = (unsigned char)((val >> 8) & 0xff);
-	}
-	else if(val <= 0xFFFFFF) {
-		l = 4;
-		buf[0] = (unsigned char)VER1_VINT_3BYTES;
-		buf[1] = (unsigned char)(val & 0xff);
-		buf[2] = (unsigned char)((val >> 8) & 0xff);
-		buf[3] = (unsigned char)((val >> 16) & 0xff);
-	}
-	else if(val <= 0xFFFFFFFF) {
-		l = 5;
-		buf[0] = (unsigned char)VER1_VINT_4BYTES;
-		buf[1] = (unsigned char)(val & 0xff);
-		buf[2] = (unsigned char)((val >> 8) & 0xff);
-		buf[3] = (unsigned char)((val >> 16) & 0xff);
-		buf[4] = (unsigned char)((val >> 24) & 0xff);
-	}
-	memcpy(trg, &buf, l);
-	return l;
-}
-static int _fspacker_packer_ver1_write_vin(bufferObject *b, Py_ssize_t val) {
-	unsigned char buf[5];
-	size_t l = 1;
-	if (val < VER1_VINT_2BYTES) {
-		buf[0] = (unsigned char)(val & 0xff);
-	}
-	else if(val <= 0xFFFF) {
-		l = 3;
-		buf[0] = (unsigned char)VER1_VINT_2BYTES;
-		buf[1] = (unsigned char)(val & 0xff);
-		buf[2] = (unsigned char)((val >> 8) & 0xff);
-	}
-	else if(val <= 0xFFFFFF) {
-		l = 4;
-		buf[0] = (unsigned char)VER1_VINT_3BYTES;
-		buf[1] = (unsigned char)(val & 0xff);
-		buf[2] = (unsigned char)((val >> 8) & 0xff);
-		buf[3] = (unsigned char)((val >> 16) & 0xff);
-	}
-	else if(val <= 0xFFFFFFFF) {
-		l = 5;
-		buf[0] = (unsigned char)VER1_VINT_4BYTES;
-		buf[1] = (unsigned char)(val & 0xff);
-		buf[2] = (unsigned char)((val >> 8) & 0xff);
-		buf[3] = (unsigned char)((val >> 16) & 0xff);
-		buf[4] = (unsigned char)((val >> 24) & 0xff);
-	}
-	else {
-		FSPackerState *FSPackerModule = _fspacker_GetGlobalState();
-		PyErr_SetString(FSPackerModule->PackingError, "Too big number");
-		return -1;
-	}
-	return _fspacker_buffer_append(b, buf, l);
-}
-static int _fspacker_packer_ver1_register(packerObject_ver1 *self, PyObject *obj) {
-	Py_ssize_t *value;
-	value = PyMemoTable_Get(self->memo, obj);
-	if (value == NULL) {
-		Py_ssize_t idx = PyMemoTable_Size(self->memo);
-		if (PyMemoTable_Set(self->memo, obj, idx) < 0) {
-			return -1;
-		}
-		if (_fspacker_packer_ver1_write_vin(self->opCodes, idx) < 0) {
-			return -1;
-		}
-		#if defined(FSPACKER_DEBUG)
-		printf("Indexed to #%ld\n", idx);
-		#endif
-	} else {
-		if (_fspacker_packer_ver1_write_vin(self->opCodes, (Py_ssize_t)*value) < 0) {
-			return -1;
-		}
-		#if defined(FSPACKER_DEBUG)
-		printf("Already indexed on #%ld\n", (Py_ssize_t)*value);
-		#endif
-	}
-	return value == NULL;
-}
-// types
-static int _fspacker_packer_ver1_list(packerObject_ver1 *self, PyObject *obj, int recursiveLimit) {
-	Py_ssize_t len = PyList_Size(obj);
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing list with length: %ld\n", len);
-	#endif
-	if (len > ITEM_LIMIT) {
-		PyErr_SetString(self->module->PackingError, "Too big list to pack");
-		return -1;
-	}
-	else if (len == 0) {
-		return _fspacker_buffer_append(self->opCodes, &VER1_OP_ZERO_LIST, 1);
-	}
-	if (_fspacker_buffer_append(self->opCodes, &VER1_OP_LIST, 1) < 0) {
-		return -1;
-	}
-	if (_fspacker_packer_ver1_write_vin(self->opCodes, len) < 0) {
-		return -1;
-	}
-	int newRecursiveLimit = recursiveLimit-1;
-	PyObject *firstitem = NULL;
-	PyObject *item = NULL;
-	PyObject *iter = NULL;
-	iter = PyObject_GetIter(obj);
-	if (iter == NULL) {
-		PyErr_NoMemory();
-		goto error;
-	}
-	firstitem = PyIter_Next(iter);
-	if (firstitem == NULL) {
-		if (PyErr_Occurred()) {
-			PyErr_SetNone(PyExc_RuntimeError);
-			goto error;
-		}
-		return 0;
-	}
-	item = PyIter_Next(iter);
-	if (item == NULL) {
-		if (PyErr_Occurred()) {
-			PyErr_SetNone(PyExc_RuntimeError);
-			goto error;
-		}
-		if (_fspacker_packer_ver1_parser(self, firstitem, newRecursiveLimit) < 0) {
-			goto error;
-		}
-		Py_CLEAR(firstitem);
-		return 0;
-	}
-	if (_fspacker_packer_ver1_parser(self, firstitem, newRecursiveLimit) < 0) {
-		goto error;
-	}
-	Py_CLEAR(firstitem);
-	while (item) {
-		if ( _fspacker_packer_ver1_parser(self, item, newRecursiveLimit) < 0 ) {
-			goto error;
-		}
-		Py_CLEAR(item);
-		item = PyIter_Next(iter);
-		if (item == NULL) {
-			if (PyErr_Occurred()){
-				PyErr_SetNone(PyExc_RuntimeError);
-				goto error;
-			}
-			break;
-		}
-	}
-	Py_XDECREF(firstitem);
-	Py_XDECREF(item);
-	Py_XDECREF(iter);
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing list done\n");
-	#endif
-	return 0;
-	error:
-	Py_XDECREF(firstitem);
-	Py_XDECREF(item);
-	Py_XDECREF(iter);
-	return -1;
-}
-static int _fspacker_packer_ver1_tuple(packerObject_ver1 *self, PyObject *obj, int recursiveLimit) {
-	Py_ssize_t len = PyTuple_Size(obj);
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing tuple with length: %ld\n", len);
-	#endif
-	if (len > ITEM_LIMIT) {
-		PyErr_SetString(self->module->PackingError, "Too big tuple to pack");
-		return -1;
-	}
-	else if (len == 0) {
-		return _fspacker_buffer_append(self->opCodes, &VER1_OP_ZERO_LIST, 1);
-	}
-	if (_fspacker_buffer_append(self->opCodes, &VER1_OP_LIST, 1) < 0) {
-		return -1;
-	}
-	if (_fspacker_packer_ver1_write_vin(self->opCodes, len) < 0) {
-		return -1;
-	}
-	int newRecursiveLimit = recursiveLimit-1;
-	for (int i = 0; i < len; i++) {
-		PyObject *item = PyTuple_GET_ITEM(obj, i);
-		if (item == NULL) {
-			PyErr_SetNone(PyExc_RuntimeError);
-			return -1;
-		}
-		if ( _fspacker_packer_ver1_parser(self, item, newRecursiveLimit) == -1 ) {
-			return -1;
-		}
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing tuple done\n");
-	#endif
-	return 0;
-}
-static int _fspacker_packer_ver1_set(packerObject_ver1 *self, PyObject *obj, int recursiveLimit) {
-	PyObject *item;
-	Py_hash_t hash;
-	Py_ssize_t ppos = 0;
-	Py_ssize_t len = PySet_GET_SIZE(obj);
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing set with length: %ld\n", len);
-	#endif
-	if (len > ITEM_LIMIT) {
-		PyErr_SetString(self->module->PackingError, "Too big tuple to pack");
-		return -1;
-	}
-	else if (len == 0) {
-		return _fspacker_buffer_append(self->opCodes, &VER1_OP_ZERO_SET, 1);
-	}
-	if (_fspacker_buffer_append(self->opCodes, &VER1_OP_SET, 1) < 0) {
-		return -1;
-	}
-	if (_fspacker_packer_ver1_write_vin(self->opCodes, len) < 0) {
-		return -1;
-	}
-	int newRecursiveLimit = recursiveLimit-1;
-	while (_PySet_NextEntry(obj, &ppos, &item, &hash)) {
-		if ( _fspacker_packer_ver1_parser(self, item, newRecursiveLimit) == -1 ) {
-			return -1;
-		}
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing set done\n");
-	#endif
-	return 0;
-}
-static int _fspacker_packer_ver1_dict(packerObject_ver1 *self, PyObject *obj, int recursiveLimit) {
-	PyObject *key = NULL;
-	PyObject *value = NULL;
-	Py_ssize_t ppos = 0;
-	Py_ssize_t len = PyDict_GET_SIZE(obj);
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing list with length: %ld\n", len);
-	#endif
-	if (len > ITEM_LIMIT) {
-		PyErr_SetString(self->module->PackingError, "Too big dict to pack");
-		return -1;
-	}
-	else if (len == 0) {
-		return _fspacker_buffer_append(self->opCodes, &VER1_OP_ZERO_DICT, 1);
-	}
-	if (_fspacker_buffer_append(self->opCodes, &VER1_OP_DICT, 1) < 0) {
-		return -1;
-	}
-	if (_fspacker_packer_ver1_write_vin(self->opCodes, len) < 0) {
-		return -1;
-	}
-	int newRecursiveLimit = recursiveLimit-1;
-	while (PyDict_Next(obj, &ppos, &key, &value)) {
-		if ( _fspacker_packer_ver1_parser(self, key, newRecursiveLimit) == -1 ) {
-			return -1;
-		}
-		if ( _fspacker_packer_ver1_parser(self, value, newRecursiveLimit) == -1 ) {
-			return -1;
-		}
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing dict done\n");
-	#endif
-	return 0;
-}
-static int _fspacker_packer_ver1_int(packerObject_ver1 *self, PyObject *obj) {
-	Py_ssize_t nbits = _PyLong_NumBits(obj);
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing int\n");
-	#endif
-	if (nbits == 0) {
-		return _fspacker_buffer_append(self->opCodes, &VER1_OP_ZERO_INTERGER, 1);
-	}
-	Py_ssize_t nbytes = (nbits >> 3)+1;
-	if (nbytes > ITEM_LIMIT) {
-		PyErr_SetString(self->module->PackingError, "Too big integer to pack");
-		return -1;
-	}
-	int doStore = _fspacker_packer_ver1_register(self, obj);
-	if (doStore < 0) {
-		return -1;
-	}
-	else if (doStore > 0) {
-		unsigned char *pdata;
-		int sign = _PyLong_Sign(obj);
-		PyObject *absObj = obj;
-		PyObject *repr = NULL;
-		if (sign < 0) {
-			if (_fspacker_buffer_append(self->data, &VER1_OP_NEG_INTERGER, 1) < 0) {
-				return -1;
-			}
-			absObj = PyNumber_Absolute(obj);
-		} else {
-			if (_fspacker_buffer_append(self->data, &VER1_OP_INTERGER, 1) < 0) {
-				return -1;
-			}
-		}
-		repr = PyBytes_FromStringAndSize(NULL, nbytes);
-		if (repr == NULL) {
-			goto memoryError;
-		}
-		pdata = (unsigned char *)PyBytes_AS_STRING(repr);
-		Py_DECREF(repr);
-		if (_PyLong_AsByteArray((PyLongObject *)absObj, pdata, nbytes, 1, 0) < 0) {
-			return -1;
-		}
-		if ((nbytes*8)-nbits >= 8 ) {
-			nbytes -= 1;
-		}
-		if (_fspacker_packer_ver1_write_vin(self->data, nbytes) < 0) {
-			return -1;
-		}
-		if (_fspacker_buffer_append(self->data, pdata, nbytes) < 0) {
-			return -1;
-		}
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing int done\n");
-	#endif
-	return 0;
-	memoryError:
-	PyErr_NoMemory();
-	return -1;
-}
-static int _fspacker_packer_ver1_bytes(packerObject_ver1 *self, PyObject *obj) {
-	Py_ssize_t len = PyBytes_GET_SIZE(obj);
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing bytes with length: %ld\n", len);
-	#endif
-	if (len > ITEM_LIMIT) {
-		PyErr_SetString(self->module->PackingError, "Too big bytes to pack");
-		return -1;
-	}
-	else if (len == 0) {
-		return _fspacker_buffer_append(self->opCodes, &VER1_OP_ZERO_BYTES, 1);
-	}
-	int doStore = _fspacker_packer_ver1_register(self, obj);
-	if (doStore < 0) {
-		return -1;
-	}
-	else if (doStore > 0) {
-		const char *data = PyBytes_AS_STRING(obj);
-		if (_fspacker_buffer_append(self->data, &VER1_OP_BYTES, 1) < 0) {
-			return -1;
-		}
-		if (_fspacker_packer_ver1_write_vin(self->data, len) < 0) {
-			return -1;
-		}
-		if (_fspacker_buffer_append(self->data, &data[0], len) < 0) {
-			return -1;
-		}
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing bytes done\n");
-	#endif
-	return 0;
-}
-static int _fspacker_packer_ver1_bytearray(packerObject_ver1 *self, PyObject *obj) {
-	Py_ssize_t len = PyByteArray_GET_SIZE(obj);
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing bytearray with length: %ld\n", len);
-	#endif
-	if (len > ITEM_LIMIT) {
-		PyErr_SetString(self->module->PackingError, "Too big bytearray to pack");
-		return -1;
-	}
-	else if (len == 0) {
-		return _fspacker_buffer_append(self->opCodes, &VER1_OP_ZERO_BYTES, 1);
-	}
-	int doStore = _fspacker_packer_ver1_register(self, obj);
-	if (doStore < 0) {
-		return -1;
-	}
-	else if (doStore > 0) {
-		const char *data = PyByteArray_AS_STRING(obj);
-		if (_fspacker_buffer_append(self->data, &VER1_OP_BYTES, 1) < 0) {
-			return -1;
-		}
-		if (_fspacker_packer_ver1_write_vin(self->data, len) < 0) {
-			return -1;
-		}
-		if (_fspacker_buffer_append(self->data, &data[0], len) < 0) {
-			return -1;
-		}
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing bytearray done\n");
-	#endif
-	return 0;
-}
-static int _fspacker_packer_ver1_none(packerObject_ver1 *self) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing None...\n");
-		int ret = _fspacker_buffer_append(self->opCodes, &VER1_OP_NONE, 1);
-		printf("Packing None done\n");
-		return ret;
-	#else
-		return _fspacker_buffer_append(self->opCodes, &VER1_OP_NONE, 1);
-	#endif
-}
-static int _fspacker_packer_ver1_bool(packerObject_ver1 *self, PyObject *obj) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing bool...\n");
-		int ret = _fspacker_buffer_append(self->opCodes, (unsigned char*)&((obj==Py_True) ? VER1_OP_BOOL_TRUE:VER1_OP_BOOL_FALSE), 1);
-		printf("Packing bool done\n");
-		return ret;
-	#else
-		return _fspacker_buffer_append(self->opCodes, (unsigned char*)&((obj==Py_True) ? VER1_OP_BOOL_TRUE:VER1_OP_BOOL_FALSE), 1);
-	#endif
-}
-static int _fspacker_packer_ver1_float(packerObject_ver1 *self, PyObject *obj) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing float\n");
-	#endif
-	double x = PyFloat_AS_DOUBLE((PyFloatObject *)obj);
-	if (x == 0.0) {
-		return _fspacker_buffer_append(self->opCodes, &VER1_OP_ZERO_FLOAT, 1);
-	}
-	int doStore = _fspacker_packer_ver1_register(self, obj);
-	if (doStore < 0) {
-		#if defined(FSPACKER_DEBUG)
-			printf("Packing float done\n");
-		#endif
-		return -1;
-	}
-	else if (doStore > 0) {
-		PyObject *hexMethod = NULL;
-		PyObject *floatInHex = NULL;
-		PyObject *strHex = NULL;
-		Py_ssize_t hexSize;
-		Py_ssize_t hexShift;
-		const char *data;
-		const char hexStr[] = "hex";
-		hexMethod = PyObject_GetAttrString(obj, hexStr);
-		if ( hexMethod == NULL ) {
-			goto memoryError;
-		}
-		floatInHex = PyObject_CallFunctionObjArgs(hexMethod, NULL);
-		if ( floatInHex == NULL ) {
-			goto memoryError;
-		}
-		strHex = raw_unicode_escape(floatInHex);
-		if ( strHex == NULL ) {
-			goto memoryError;
-		}
-		hexSize = PyObject_Length(strHex);
-		data = PyBytes_AS_STRING(strHex);
-		if ( data == NULL ) {
-			goto memoryError;
-		}
-		if ( (unsigned char)data[0] == 0x2d ) {
-			if (_fspacker_buffer_append(self->data, &VER1_OP_NEG_FLOAT, 1) < 0) {
-				goto error;
-			}
-			hexShift = 1;
-		} else {
-			if (_fspacker_buffer_append(self->data, &VER1_OP_FLOAT, 1) < 0) {
-				goto error;
-			}
-			hexShift = 0;
-		}
-		if ( (unsigned char)data[hexShift] == 0x30 && (unsigned char)data[hexShift+1] == 0x78) {
-			hexShift += 2;
-		}
-		if (_fspacker_packer_ver1_write_vin(self->data, hexSize-hexShift) < 0) {
-			goto error;
-		}
-		if (_fspacker_buffer_append(self->data, &data[hexShift], hexSize-hexShift) < 0) {
-			goto error;
-		}
-		Py_DECREF(hexMethod);
-		Py_DECREF(floatInHex);
-		Py_DECREF(strHex);
-		#if defined(FSPACKER_DEBUG)
-			printf("Packing float done\n");
-		#endif
-		return 0;
-		memoryError:
-		PyErr_NoMemory();
-		error:
-		Py_XDECREF(hexMethod);
-		Py_XDECREF(floatInHex);
-		Py_XDECREF(strHex);
-		return -1;
-	}
-	return 0;
-}
-static int _fspacker_packer_ver1_unicode(packerObject_ver1 *self, PyObject *obj) {
-	Py_ssize_t len = PyUnicode_GetLength(obj);
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing unicode with length: %ld\n", len);
-	#endif
-	if (len == 0) {
-		return _fspacker_buffer_append(self->opCodes, &VER1_OP_ZERO_UNICODE, 1);
-	}
-	int doStore = _fspacker_packer_ver1_register(self, obj);
-	if (doStore < 0) {
-		#if defined(FSPACKER_DEBUG)
-			printf("Packing unicode done\n");
-		#endif
-		return -1;
-	}
-	else if (doStore > 0) {
-		if (_fspacker_buffer_append(self->data, &VER1_OP_UNICODE, 1) < 0) {
-			return -1;
-		}
-		PyObject *escapedStr = NULL;
-		Py_ssize_t strLen;
-		const char *data;
-		escapedStr = PyUnicode_AsRawUnicodeEscapeString(obj);
-		if ( escapedStr == NULL ) {
-			goto memoryError;
-		}
-		strLen = PyObject_Length(escapedStr);
-		data = PyBytes_AS_STRING(escapedStr);
-		if ( data == NULL ) {
-			goto memoryError;
-		}
-		if (_fspacker_packer_ver1_write_vin(self->data, strLen) < 0) {
-			goto error;
-		}
-		if (_fspacker_buffer_append(self->data, &data[0], strLen) < 0) {
-			goto error;
-		}
-		Py_DECREF(escapedStr);
-		#if defined(FSPACKER_DEBUG)
-			printf("Packing unicode done\n");
-		#endif
-		return 0;
-		memoryError:
-		PyErr_NoMemory();
-		error:
-		Py_XDECREF(escapedStr);
-		return -1;
-	}
-	return 0;
-}
-// parser
-static int _fspacker_packer_ver1_parser(packerObject_ver1 *self, PyObject *obj, int recursiveLimit) {
-	if (recursiveLimit < 0) {
-		PyErr_SetString(self->module->PackingError, "Invalid recursive limit");
-		return -1;
-	}
-	PyTypeObject *type;
-	type = Py_TYPE(obj);
-	if (obj == Py_None) {
-		return _fspacker_packer_ver1_none(self);
-	}
-	else if (obj == Py_False || obj == Py_True) {
-		return _fspacker_packer_ver1_bool(self, obj);
-	}
-	else if (type == &PyLong_Type) {
-		return _fspacker_packer_ver1_int(self, obj);
-	}
-	else if (type == &PyFloat_Type) {
-		return _fspacker_packer_ver1_float(self, obj);
-	}
-	else if (type == &PyBytes_Type) {
-		return _fspacker_packer_ver1_bytes(self, obj);
-	}
-	else if (type == &PyUnicode_Type) {
-		return _fspacker_packer_ver1_unicode(self, obj);
-	}
-	else if (type == &PySet_Type) {
-		return _fspacker_packer_ver1_set(self, obj, recursiveLimit);
-	}
-	else if (type == &PyList_Type) {
-		return _fspacker_packer_ver1_list(self, obj, recursiveLimit);
-	}
-	else if (type == &PyTuple_Type) {
-		return _fspacker_packer_ver1_tuple(self, obj, recursiveLimit);
-	}
-	else if (type == &PyDict_Type) {
-		return _fspacker_packer_ver1_dict(self, obj, recursiveLimit);
-	}
-	else if (type == &PyByteArray_Type) {
-		return _fspacker_packer_ver1_bytearray(self, obj);
-	}
-	PyErr_Format(self->module->PackingError, "Packing %.200s type is not supported", type->tp_name);
-	return -1;
-}
-static PyObject *_fspacker_packer_ver1(FSPackerState *module, PyObject *obj, PyObject *stream, Py_ssize_t recursiveLimit) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing version 1 recursiveLimit: %ld\n", recursiveLimit);
-	#endif
-	size_t bufferLength = 256;
-	packerObject_ver1 packer;
-	packer.memo = NULL;
-	bufferObject opCodes;
-	bufferObject data;
-	data.buf = NULL;
-	PyObject *ret = NULL;
-	PyObject *writeMethod = NULL;
-	PyObject *methodRet = NULL;
-	const char ver = 0x01;
-	char *retBuffer;
-	Py_ssize_t retBufferLength = 0;
-	opCodes.buf = (char*)PyMem_Malloc(bufferLength);
-	if (opCodes.buf == NULL) {
-		goto memoryError;
-	}
-	data.buf = (char*)PyMem_Malloc(bufferLength);
-	if (data.buf == NULL) {
-		goto memoryError;
-	}
-	packer.memo = PyMemoTable_New();
-	if (packer.memo == NULL) {
-		goto memoryError;
-	}
-	packer.opCodes = &opCodes;
-	packer.data = &data;
-	packer.module = module;
-	packer.stream = NULL;
-	opCodes.buf_size = bufferLength;
-	opCodes.length = 0;
-	data.buf_size = bufferLength;
-	data.length = 0;
-	if ( _fspacker_packer_ver1_parser(&packer, obj, recursiveLimit) < 0 ) {
-		goto error;
-	}
-	retBuffer = (char*)PyMem_Malloc(((data.length + opCodes.length) + 6));
-	if (retBuffer == NULL) {
-		goto memoryError;
-	}
-	memcpy(retBuffer, &ver, 1);
-	retBufferLength = _fspacker_packer_ver1_create_vin((retBuffer+1), packer.memo->mt_used);
-	if (retBufferLength < 0) {
-		goto error;
-	}
-	retBufferLength += 1;
-	memcpy(retBuffer + retBufferLength, data.buf, data.length);
-	retBufferLength += data.length;
-	memcpy(retBuffer + retBufferLength, opCodes.buf, opCodes.length);
-	retBufferLength += opCodes.length;
-	PyMem_Free(data.buf);
-	PyMem_Free(opCodes.buf);
-	PyMemoTable_Del(packer.memo);
-	packer.memo = NULL;
-	#if defined(FSPACKER_DEBUG)
-		printf("Done\n");
-	#endif
-	ret = PyBytes_FromStringAndSize(retBuffer, retBufferLength);
-	if (ret == NULL) {
-		goto memoryError;
-	}
-	if (stream != NULL) {
-		_Py_IDENTIFIER(write);
-		if (_PyObject_LookupAttrId(stream, &PyId_write, &writeMethod) < 0) {
-			PyErr_SetString(module->PackingError, "Stream does not have write method");
-			goto error;
-		}
-		if (writeMethod == NULL) {
-			PyErr_SetString(module->PackingError, "Unable to write to the stream");
-			goto error;
-		}
-		methodRet = PyObject_CallFunctionObjArgs(writeMethod, ret, NULL);
-		if (PyErr_Occurred() != NULL) {
-			goto error;
-		}
-		if (methodRet == NULL) {
-			PyErr_SetString(module->PackingError, "Unable to write to the stream");
-			goto error;
-		}
-		Py_DECREF(methodRet);
-		Py_DECREF(writeMethod);
-		Py_RETURN_NONE;
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing done\n");
-	#endif
-	return ret;
-	memoryError:
-	PyErr_NoMemory();
-	error:
-	Py_XDECREF(methodRet);
-	Py_XDECREF(writeMethod);
-	Py_XDECREF(ret);
-	PyMem_Free(data.buf);
-	PyMem_Free(opCodes.buf);
-	PyMemoTable_Del(packer.memo);
-	#if defined(FSPACKER_DEBUG)
-		printf("Packing ERROR\n");
-	#endif
-	return NULL;
-}
-// ---- UNPACKER -----
-struct unpackerObject_ver1 {
-	const char *input;
-	Py_ssize_t input_pos;
-	Py_ssize_t input_length;
-	PyObject *memo; //PyTuple
-	Py_ssize_t memo_length;
-	FSPackerState *module;
-};
-// abstract
-static PyObject* _fspacker_unpacker_ver1_parser(unpackerObject_ver1 *self, bool onMemo);
-// misc
-static Py_ssize_t _fspacker_unpacker_ver1_read_vin(unpackerObject_ver1 *self) {
-	Py_ssize_t ret;
-	if ( self->input_length - self->input_pos < 1 ) {
-		goto EOFError;
-	}
-	if ( (uint8_t)(self->input[self->input_pos]) < VER1_VINT_2BYTES ) {
-		ret = (uint8_t)self->input[self->input_pos];
-		self->input_pos++;
-	} else {
-		if ( (uint8_t)(self->input[self->input_pos]) == VER1_VINT_2BYTES ) {
-			if ( self->input_length - self->input_pos < 3 ) {
-				goto EOFError;
-			}
-			ret =(uint8_t)(self->input[self->input_pos+1]);
-			ret += (uint8_t)(self->input[self->input_pos+2]) << 8;
-			self->input_pos += 3;
-		}
-		else if ( (uint8_t)(self->input[self->input_pos]) == VER1_VINT_3BYTES ) {
-			if ( self->input_length - self->input_pos < 4 ) {
-				goto EOFError;
-			}
-			ret = (uint8_t)(self->input[self->input_pos+1]);
-			ret += (uint8_t)(self->input[self->input_pos+2]) << 8;
-			ret += (uint8_t)(self->input[self->input_pos+3]) << 16;
-			self->input_pos += 4;
-		}
-		else if ( (uint8_t)(self->input[self->input_pos]) == VER1_VINT_4BYTES ) {
-			if ( self->input_length - self->input_pos < 5 ) {
-				goto EOFError;
-			}
-			ret = (uint8_t)(self->input[self->input_pos+1]);
-			ret += (uint8_t)(self->input[self->input_pos+2]) << 8;
-			ret += (uint8_t)(self->input[self->input_pos+3]) << 16;
-			ret += (uint8_t)(self->input[self->input_pos+4]) << 24;
-			self->input_pos += 5;
-		}
-		else {
-			PyErr_SetString(self->module->UnpackingError, "Too big integer to read");
-			return 0;
-		}
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("vIn return: %lu\n", ret);
-	#endif
-	return ret;
-	EOFError:
-		PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
-		return 0;
-}
-// types
-static PyObject* _fspacker_unpacker_ver1_int(unpackerObject_ver1 *self, bool isNeg) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Unpacking int\n");
-	#endif
-	PyObject *ret = NULL;
-	PyObject *value = NULL;
-	Py_ssize_t vLen = _fspacker_unpacker_ver1_read_vin(self);
-	if ( vLen == 0 ) {
-		goto EOFError;
-	}
-	if (self->input_pos+vLen > self->input_length) {
-		goto EOFError;
-	}
-	value = _PyLong_FromByteArray((unsigned char*)&self->input[self->input_pos], vLen, 1, 0);
-	if ( value == NULL ) {
-		goto memoryError;
-	}
-	self->input_pos += vLen;
-	if ( isNeg ) {
-		ret = PyNumber_Negative(value);
-		Py_DECREF(value);
-	} else {
-		ret = value;
-		value = NULL;
-	}
-	return ret;
-	memoryError:
-	PyErr_NoMemory();
-	if (0) {
-		EOFError:
-		PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
-	}
-	return NULL;
-}
-static PyObject* _fspacker_unpacker_ver1_float(unpackerObject_ver1 *self, bool isNeg) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Unpacking float\n");
-	#endif
-	const char methodStr[] = "fromhex";
-	PyObject *ret = NULL;
-	PyObject *arg = NULL;
-	PyObject *method = NULL;
-	PyObject *value = NULL;
-	Py_ssize_t vLen = _fspacker_unpacker_ver1_read_vin(self);
-	if ( vLen == 0 ) {
-		goto EOFError;
-	}
-	if (self->input_pos+vLen > self->input_length) {
-		goto EOFError;
-	}
-	arg = PyUnicode_FromStringAndSize(&self->input[self->input_pos], vLen);
-	self->input_pos += vLen;
-	if ( arg == NULL ) {
-		goto memoryError;
-	}
-	value = PyFloat_FromDouble((double)0);
-	if ( value == NULL ) {
-		goto memoryError;
-	}
-	method = PyObject_GetAttrString(value, methodStr);
-	if ( method == NULL ) {
-		goto memoryError;
-	}
-	value = PyObject_CallFunctionObjArgs(method, arg, NULL);
-	if ( value == NULL ) {
-		goto memoryError;
-	}
-	if ( isNeg ) {
-		ret = PyNumber_Negative(value);
-		Py_DECREF(value);
-	} else {
-		ret = value;
-	}
-	Py_DECREF(arg);
-	Py_DECREF(method);
-	return ret;
-	memoryError:
-	PyErr_NoMemory();
-	if (0) {
-		EOFError:
-		PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
-	}
-	Py_XDECREF(ret);
-	Py_XDECREF(arg);
-	Py_XDECREF(method);
-	return NULL;
-}
-static PyObject* _fspacker_unpacker_ver1_bytes(unpackerObject_ver1 *self) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Unpacking bytes\n");
-	#endif
-	PyObject *ret = NULL;
-	Py_ssize_t vLen = _fspacker_unpacker_ver1_read_vin(self);
-	if ( vLen == 0 ) {
-		goto EOFError;
-	}
-	if (self->input_pos+vLen > self->input_length) {
-		goto EOFError;
-	}
-	ret = PyBytes_FromStringAndSize(&self->input[self->input_pos], vLen);
-	self->input_pos += vLen;
-	return ret;
-	EOFError:
-	PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
-	return NULL;
-}
-static PyObject* _fspacker_unpacker_ver1_tuple(unpackerObject_ver1 *self) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Unpacking tuple\n");
-	#endif
-	PyObject *ret = NULL;
-	PyObject *value = NULL;
-	Py_ssize_t vLen = _fspacker_unpacker_ver1_read_vin(self);
-	Py_ssize_t i;
-	if ( vLen == 0 ) {
-		goto EOFError;
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Tuple length: %ld\n", vLen);
-	#endif
-	ret = PyTuple_New(vLen);
-	for ( i=0 ; i<vLen ; i++ ) {
-		#if defined(FSPACKER_DEBUG)
-			printf("Processing #%ld\n", i);
-		#endif
-		value = _fspacker_unpacker_ver1_parser(self, false);
-		if ( value == NULL ) {
-			goto error;
-		}
-		PyTuple_SET_ITEM(ret, i, value);
-		value = NULL;
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Tuple processed\n");
-	#endif
-	return ret;
-	EOFError:
-	PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
-	error:
-	Py_XDECREF(ret);
-	Py_XDECREF(value);
-	return NULL;
-}
-static PyObject* _fspacker_unpacker_ver1_set(unpackerObject_ver1 *self) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Unpacking set\n");
-	#endif
-	PyObject *ret = NULL;
-	PyObject *value = NULL;
-	Py_ssize_t vLen = _fspacker_unpacker_ver1_read_vin(self);
-	Py_ssize_t i;
-	if ( vLen == 0 ) {
-		goto EOFError;
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Set length: %ld\n", vLen);
-	#endif
-	ret = PySet_New(NULL);
-	for ( i=0 ; i<vLen ; i++ ) {
-		#if defined(FSPACKER_DEBUG)
-			printf("Processing #%ld\n", i);
-		#endif
-		value = _fspacker_unpacker_ver1_parser(self, false);
-		if ( value == NULL ) {
-			goto error;
-		}
-		if ( PySet_Add(ret, value) < 0 ) {
-			goto memoryError;
-		}
-		value = NULL;
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Set processed\n");
-	#endif
-	return ret;
-	memoryError:
-	PyErr_NoMemory();
-	if (0) {
-		EOFError:
-		PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
-	}
-	error:
-	Py_XDECREF(ret);
-	Py_XDECREF(value);
-	return NULL;
-}
-static PyObject* _fspacker_unpacker_ver1_dict(unpackerObject_ver1 *self) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Unpacking dict\n");
-	#endif
-	PyObject *ret = NULL;
-	PyObject *key = NULL;
-	PyObject *value = NULL;
-	Py_ssize_t vLen = _fspacker_unpacker_ver1_read_vin(self);
-	Py_ssize_t i;
-	if ( vLen == 0 ) {
-		goto EOFError;
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Dict length: %ld\n", vLen);
-	#endif
-	ret = PyDict_New();
-	for ( i=0 ; i<vLen ; i++ ) {
-		#if defined(FSPACKER_DEBUG)
-			printf("Processing key of #%ld\n", i);
-		#endif
-		key = _fspacker_unpacker_ver1_parser(self, false);
-		if ( key == NULL ) {
-			goto error;
-		}
-		#if defined(FSPACKER_DEBUG)
-			printf("Processing value of #%ld\n", i);
-		#endif
-		value = _fspacker_unpacker_ver1_parser(self, false);
-		if ( value == NULL ) {
-			goto error;
-		}
-		if ( PyDict_SetItem(ret, key, value) < 0 ) {
-			PyErr_SetNone(PyExc_RuntimeError);
-			goto error;
-		}
-		key = NULL;
-		value = NULL;
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Dict processed\n");
-	#endif
-	return ret;
-	EOFError:
-	PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
-	error:
-	Py_XDECREF(ret);
-	Py_XDECREF(value);
-	Py_XDECREF(key);
-	return NULL;
-}
-static PyObject* _fspacker_unpacker_ver1_unicode(unpackerObject_ver1 *self) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Unpacking unicode\n");
-	#endif
-	PyObject *ret = NULL;
-	Py_ssize_t vLen = _fspacker_unpacker_ver1_read_vin(self);
-	if ( vLen == 0 ) {
-		goto EOFError;
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Unicode length: %ld\n", vLen);
-	#endif
-	if (self->input_pos+vLen > self->input_length) {
-		goto EOFError;
-	}
-	ret = PyUnicode_DecodeRawUnicodeEscape(&self->input[self->input_pos], vLen, NULL);
-	if (ret == NULL) {
-		return NULL;
-	}
-	self->input_pos += vLen;
-	#if defined(FSPACKER_DEBUG)
-		printf("Unicode processed\n");
-	#endif
-	return ret;
-	EOFError:
-	PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
-	return NULL;
-}
-// parser
-static PyObject* _fspacker_unpacker_ver1_parser(unpackerObject_ver1 *self, bool onMemo) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Parsing.. buffer: %ld/%ld [OnMemo: %d]\n", self->input_pos, self->input_length, onMemo);
-	#endif
-	Py_ssize_t indexPos;
-	uint8_t op;
-	PyObject *ret = NULL;
-	if ( self->input_pos >= self->input_length ) {
-		goto EOFError;
-	}
-	op = self->input[self->input_pos];
-	#if defined(FSPACKER_DEBUG)
-		printf("Readed OP code: %u\n", (unsigned char)op);
-	#endif
-	if (op >= VER1_OP_NONE) {
-		self->input_pos++;
-		switch (op) {
-			case VER1_OP_NONE:
-				#if defined(FSPACKER_DEBUG)
-					printf("Unpacking None\n");
-				#endif
-				ret = Py_None;
-				break;
-			case VER1_OP_BOOL_FALSE:
-				#if defined(FSPACKER_DEBUG)
-					printf("Unpacking False\n");
-				#endif
-				ret = Py_False;
-				break;
-			case VER1_OP_BOOL_TRUE:
-				#if defined(FSPACKER_DEBUG)
-					printf("Unpacking True\n");
-				#endif
-				ret = Py_True;
-				break;
-			case VER1_OP_INTERGER:
-			case VER1_OP_NEG_INTERGER:
-				ret = _fspacker_unpacker_ver1_int(self, op==VER1_OP_NEG_INTERGER);
-				break;
-			case VER1_OP_ZERO_INTERGER:
-				#if defined(FSPACKER_DEBUG)
-					printf("Unpacking zero integer\n");
-				#endif
-				ret = PyLong_FromSsize_t(0);
-				break;
-			case VER1_OP_FLOAT:
-			case VER1_OP_NEG_FLOAT:
-				ret = _fspacker_unpacker_ver1_float(self, op==VER1_OP_NEG_FLOAT);
-				break;
-			case VER1_OP_ZERO_FLOAT:
-				#if defined(FSPACKER_DEBUG)
-					printf("Unpacking zero float\n");
-				#endif
-				ret = PyFloat_FromDouble((double)0);
-				break;
-			case VER1_OP_UNICODE:
-				ret = _fspacker_unpacker_ver1_unicode(self);
-				break;
-			case VER1_OP_ZERO_UNICODE:
-				#if defined(FSPACKER_DEBUG)
-					printf("Unpacking zero unicode\n");
-				#endif
-				ret = PyUnicode_New(0, (Py_UCS1)0);
-				break;
-			case VER1_OP_BYTES:
-				ret = _fspacker_unpacker_ver1_bytes(self);
-				break;
-			case VER1_OP_ZERO_BYTES:
-				#if defined(FSPACKER_DEBUG)
-					printf("Unpacking zero bytes\n");
-				#endif
-				ret = PyBytes_FromStringAndSize(NULL, 0);
-				break;
-			case VER1_OP_LIST:
-				ret = _fspacker_unpacker_ver1_tuple(self);
-				break;
-			case VER1_OP_ZERO_LIST:
-				#if defined(FSPACKER_DEBUG)
-					printf("Unpacking zero list\n");
-				#endif
-				ret = PyTuple_New(0);
-				break;
-			case VER1_OP_DICT:
-				ret = _fspacker_unpacker_ver1_dict(self);
-				break;
-			case VER1_OP_ZERO_DICT:
-				#if defined(FSPACKER_DEBUG)
-					printf("Unpacking zero dict\n");
-				#endif
-				ret = PyDict_New();
-				break;
-			case VER1_OP_SET:
-				ret = _fspacker_unpacker_ver1_set(self);
-				break;
-			case VER1_OP_ZERO_SET:
-				#if defined(FSPACKER_DEBUG)
-					printf("Unpacking zero set\n");
-				#endif
-				ret = PySet_New(NULL);
-				break;
-			default:
-				PyErr_Format(self->module->UnpackingError, "Unknown OP code: %u", op);
-		}
-	}
-	else if ( onMemo ) {
-		PyErr_SetString(self->module->UnpackingError, "Invalid OP code while reading index");
-		return NULL;
-	}
-	else {
-		if ( self->input_pos > self->input_length ) {
-			goto EOFError;
-		}
-		if ( (unsigned char)self->input[self->input_pos] == 0x00 ) {
-			indexPos = 0;
-			self->input_pos++;
-		}
-		else {
-			indexPos = _fspacker_unpacker_ver1_read_vin(self);
-			if ( indexPos == 0 ) {
-				return NULL;
-			}
-		}
-		if ( indexPos >= self->memo_length || self->memo_length == 0 ) {
-			PyErr_Format(self->module->UnpackingError, "Index slot %u missing", indexPos);
-			return NULL;
-		}
-		#if defined(FSPACKER_DEBUG)
-			printf("Receiving index: #%ld\n", indexPos);
-		#endif
-		ret = PyTuple_GET_ITEM(self->memo, indexPos);
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Parsing processed [%ld]\n", (Py_ssize_t)ret);
-	#endif
-	Py_XINCREF(ret);
-	return ret;
-	EOFError:
-	PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
-	return NULL;
-}
-static PyObject* _fspacker_unpacker_ver1(FSPackerState *module, const char *input, Py_ssize_t len, Py_ssize_t maxDictSize,
-Py_ssize_t maxOPSize) {
-	#if defined(FSPACKER_DEBUG)
-		printf("Unpacking version 1 maxDictSize: %ld maxOPSize: %ld\n", maxDictSize, maxOPSize);
-	#endif
-	PyObject *ret;
-	PyObject *item = NULL;
-	unpackerObject_ver1 unpacker;
-	unpacker.input = input;
-	unpacker.input_pos = 1;
-	unpacker.input_length = len;
-	unpacker.memo = NULL;
-	unpacker.memo_length = 0;
-	unpacker.module = module;
-	if ( (unsigned int)unpacker.input[unpacker.input_pos] != 0x00 ) {
-		unpacker.memo_length = _fspacker_unpacker_ver1_read_vin(&unpacker);
-		#if defined(FSPACKER_DEBUG)
-			printf("Indexes length: %ld\n", unpacker.memo_length);
-		#endif
-		if ( unpacker.memo_length == 0 ) {
-			PyErr_SetString(module->UnpackingError, "Invalid index count");
-			goto error;
-		}
-		else if ( maxDictSize > 0 && unpacker.memo_length > maxDictSize ) {
-			PyErr_SetString(module->UnpackingError, "More indexes than maxDictSize");
-			goto error;
-		}
-		unpacker.memo = PyTuple_New(unpacker.memo_length);
-		if (unpacker.memo == NULL) {
-			goto memoryError;
-		}
-		for ( Py_ssize_t i=0 ; i<unpacker.memo_length ; i++ ) {
-			#if defined(FSPACKER_DEBUG)
-				printf("Processing index #%ld\n", i);
-			#endif
-			item = _fspacker_unpacker_ver1_parser(&unpacker, true);
-			if ( item == NULL ) {
-				goto error;
-			}
-			PyTuple_SET_ITEM(unpacker.memo, i, item);
-			#if defined(FSPACKER_DEBUG)
-				printf("Index parsed #%lu [%ld]\n", i, (Py_ssize_t)item);
-			#endif
-		}
-		#if defined(FSPACKER_DEBUG)
-			printf("Indexes parsed\n");
-		#endif
-	} else {
-		#if defined(FSPACKER_DEBUG)
-			printf("There is no indexes\n");
-		#endif
-		unpacker.input_pos++;
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Parsing OP codes..\n");
-	#endif
-	if (maxOPSize > 0 && unpacker.input_length-unpacker.input_pos > maxOPSize) {
-		PyErr_SetString(module->UnpackingError, "More OP codes than maxOPSize");
-		goto error;
-	}
-	ret = _fspacker_unpacker_ver1_parser(&unpacker, false);
-	if (ret == NULL) {
-		goto error;
-	}
-	#if defined(FSPACKER_DEBUG)
-		printf("Unpacking done\n");
-	#endif
-	Py_XDECREF(unpacker.memo);
-	return ret;
-	memoryError:
-	PyErr_NoMemory();
-	error:
-	Py_XDECREF(unpacker.memo);
-	Py_XDECREF(item);
-	#if defined(FSPACKER_DEBUG)
-		printf("Unpacking ERROR\n");
-	#endif
-	return NULL;
-}
 
 // ===== PROTOCOL VERSION 2 =====
 const uint8_t VER2_VINT_2BYTES           = 0xE5;
@@ -2535,10 +1174,11 @@ static int _fspacker_packer_ver2_parser(packerObject_ver2 *self, PyObject *obj) 
 	return -1;
 	
 }
-static PyObject *_fspacker_packer_ver2(FSPackerState *module, PyObject *obj, PyObject *stream, Py_ssize_t recursiveLimit) {
+PyObject *_fspacker_packer_ver2(PyObject *obj, PyObject *stream, Py_ssize_t recursiveLimit) {
 	#if defined(FSPACKER_DEBUG)
 		printf("Packing version 2 recursiveLimit: %ld\n", recursiveLimit);
 	#endif
+	FSPackerState *FSPackerModule = _fspacker_GetGlobalState();
 	size_t bufferLength = 64;
 	packerObject_ver2 packer;
 	packer.memo = NULL;
@@ -2556,7 +1196,7 @@ static PyObject *_fspacker_packer_ver2(FSPackerState *module, PyObject *obj, PyO
 		goto memoryError;
 	}
 	packer.output = &output;
-	packer.module = module;
+	packer.module = FSPackerModule;
 	packer.stream = NULL;
 	packer.counter = 0;
 	packer.stack = 0;
@@ -2578,11 +1218,11 @@ static PyObject *_fspacker_packer_ver2(FSPackerState *module, PyObject *obj, PyO
 	if (stream != NULL) {
 		_Py_IDENTIFIER(write);
 		if (_PyObject_LookupAttrId(stream, &PyId_write, &writeMethod) < 0) {
-			PyErr_SetString(module->PackingError, "Stream does not have write method");
+			PyErr_SetString(packer.module->PackingError, "Stream does not have write method");
 			goto error;
 		}
 		if (writeMethod == NULL) {
-			PyErr_SetString(module->PackingError, "Unable to write to the stream");
+			PyErr_SetString(packer.module->PackingError, "Unable to write to the stream");
 			goto error;
 		}
 		methodRet = PyObject_CallFunctionObjArgs(writeMethod, ret, NULL);
@@ -2590,7 +1230,7 @@ static PyObject *_fspacker_packer_ver2(FSPackerState *module, PyObject *obj, PyO
 			goto error;
 		}
 		if (methodRet == NULL) {
-			PyErr_SetString(module->PackingError, "Unable to write to the stream");
+			PyErr_SetString(packer.module->PackingError, "Unable to write to the stream");
 			goto error;
 		}
 		Py_DECREF(methodRet);
@@ -2627,6 +1267,7 @@ struct unpackerObject_ver2 {
 	Py_ssize_t stack;
 	Py_ssize_t recursiveLimit;
 	FSPackerState *module;
+	std::vector<PyObject*> allObject;
 };
 // abstract
 static PyObject* _fspacker_unpacker_ver2_parser(unpackerObject_ver2 *self);
@@ -2790,6 +1431,7 @@ static PyObject* _fspacker_unpacker_ver2_tuple(unpackerObject_ver2 *self) {
 		#if defined(FSPACKER_DEBUG)
 			printf("Tuple item #%ld unpacked\n", i);
 		#endif
+		Py_INCREF(value);
 		PyTuple_SET_ITEM(ret, i, value);
 		value = NULL;
 	}
@@ -2802,7 +1444,6 @@ static PyObject* _fspacker_unpacker_ver2_tuple(unpackerObject_ver2 *self) {
 	PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
 	error:
 	Py_XDECREF(ret);
-	Py_XDECREF(value);
 	return NULL;
 }
 static PyObject* _fspacker_unpacker_ver2_set(unpackerObject_ver2 *self) {
@@ -2850,7 +1491,6 @@ static PyObject* _fspacker_unpacker_ver2_set(unpackerObject_ver2 *self) {
 	}
 	error:
 	Py_XDECREF(ret);
-	Py_XDECREF(value);
 	return NULL;
 }
 static PyObject* _fspacker_unpacker_ver2_dict(unpackerObject_ver2 *self) {
@@ -2905,14 +1545,13 @@ static PyObject* _fspacker_unpacker_ver2_dict(unpackerObject_ver2 *self) {
 	PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
 	error:
 	Py_XDECREF(ret);
-	Py_XDECREF(value);
-	Py_XDECREF(key);
 	return NULL;
 }
 static PyObject* _fspacker_unpacker_ver2_int(unpackerObject_ver2 *self, bool isNeg, Py_ssize_t vLen) {
 	#if defined(FSPACKER_DEBUG)
 		printf("Unpacking int [vLen %ld]...\n", vLen);
 	#endif
+	PyObject *tmp = NULL;
 	PyObject *ret = NULL;
 	if (vLen == 0) {
 		vLen = _fspacker_unpacker_ver2_read_vin(self);
@@ -2929,12 +1568,12 @@ static PyObject* _fspacker_unpacker_ver2_int(unpackerObject_ver2 *self, bool isN
 	}
 	self->input_pos += vLen;
 	if (isNeg) {
-		PyObject *tmp = PyNumber_Negative(ret);
+		tmp = PyNumber_Negative(ret);
 		Py_DECREF(ret);
-		if (tmp == NULL) {
+		ret = tmp;
+		if ( ret == NULL ) {
 			goto memoryError;
 		}
-		ret = tmp;
 	}
 	if (_fspacker_unpacker_ver2_register(self, ret) < 0) {
 		goto error;
@@ -2950,6 +1589,7 @@ static PyObject* _fspacker_unpacker_ver2_int(unpackerObject_ver2 *self, bool isN
 		PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
 	}
 	error:
+	Py_XDECREF(ret);
 	return NULL;
 }
 static PyObject* _fspacker_unpacker_ver2_float(unpackerObject_ver2 *self) {
@@ -3008,6 +1648,7 @@ static PyObject* _fspacker_unpacker_ver2_bytes(unpackerObject_ver2 *self) {
 	EOFError:
 	PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
 	error:
+	Py_XDECREF(ret);
 	return NULL;
 }
 static PyObject* _fspacker_unpacker_ver2_unicode(unpackerObject_ver2 *self) {
@@ -3040,6 +1681,7 @@ static PyObject* _fspacker_unpacker_ver2_unicode(unpackerObject_ver2 *self) {
 	EOFError:
 	PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
 	error:
+	Py_XDECREF(ret);
 	return NULL;
 }
 // parser
@@ -3069,6 +1711,7 @@ static PyObject* _fspacker_unpacker_ver2_parser(unpackerObject_ver2 *self) {
 					printf("Unpacking None...\n");
 				#endif
 				ret = Py_None;
+				Py_INCREF(ret);
 				#if defined(FSPACKER_DEBUG)
 					printf("None unpacked\n");
 				#endif
@@ -3078,6 +1721,7 @@ static PyObject* _fspacker_unpacker_ver2_parser(unpackerObject_ver2 *self) {
 					printf("Unpacking False...\n");
 				#endif
 				ret = Py_False;
+				Py_INCREF(ret);
 				#if defined(FSPACKER_DEBUG)
 					printf("False unpacked\n");
 				#endif
@@ -3087,6 +1731,7 @@ static PyObject* _fspacker_unpacker_ver2_parser(unpackerObject_ver2 *self) {
 					printf("Unpacking True...\n");
 				#endif
 				ret = Py_True;
+				Py_INCREF(ret);
 				#if defined(FSPACKER_DEBUG)
 					printf("True unpacked\n");
 				#endif
@@ -3231,23 +1876,25 @@ static PyObject* _fspacker_unpacker_ver2_parser(unpackerObject_ver2 *self) {
 			printf("Receiving index: #%ld\n", indexPos);
 		#endif
 		ret = self->memo[indexPos];
+		Py_INCREF(ret);
 	}
 	#if defined(FSPACKER_DEBUG)
 		printf("Parsing processed [%ld]\n", (Py_ssize_t)ret);
 	#endif
-	Py_XINCREF(ret);
+	if ( ret != NULL ) {
+		self->allObject.push_back(ret);
+	}
 	return ret;
 	EOFError:
 	PyErr_SetString(self->module->UnpackingError, "End of buffer/Not enough data");
 	return NULL;
 }
-static PyObject* _fspacker_unpacker_ver2(FSPackerState *module, const char *input, Py_ssize_t len, Py_ssize_t maxIndexSize,
-Py_ssize_t recursiveLimit) {
+PyObject* _fspacker_unpacker_ver2(const char *input, Py_ssize_t len, Py_ssize_t maxIndexSize, Py_ssize_t recursiveLimit) {
 	#if defined(FSPACKER_DEBUG)
 		printf("Unpacking version 2 maxIndexSize: %ld recursiveLimit: %ld\n", maxIndexSize, recursiveLimit);
 	#endif
-	PyObject *ret;
-	PyObject *item = NULL;
+	FSPackerState *FSPackerModule = _fspacker_GetGlobalState();
+	PyObject *ret = NULL;
 	unpackerObject_ver2 unpacker;
 	unpacker.input = input;
 	unpacker.input_pos = 1;
@@ -3262,7 +1909,7 @@ Py_ssize_t recursiveLimit) {
 	unpacker.memo_length = 0;
 	unpacker.maxIndexSize = maxIndexSize;
 	unpacker.recursiveLimit = recursiveLimit;
-	unpacker.module = module;
+	unpacker.module = FSPackerModule;
 	ret = _fspacker_unpacker_ver2_parser(&unpacker);
 	if (ret == NULL) {
 		goto error;
@@ -3273,8 +1920,10 @@ Py_ssize_t recursiveLimit) {
 	#endif
 	return ret;
 	error:
+	for ( PyObject* obj : unpacker.allObject ) {
+		Py_XDECREF(obj);
+	}
 	PyMem_Free(unpacker.memo);
-	Py_XDECREF(item);
 	#if defined(FSPACKER_DEBUG)
 		printf("Unpacking ERROR\n");
 	#endif

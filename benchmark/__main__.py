@@ -33,7 +33,7 @@ def startBatch(i:int, data:Any, counter:int) -> None:
 	print("Batch {}# started".format(i))
 	benchmark(pickle.dumps, pickle.loads, data, "pickle", counter, 32)
 	benchmark(marshal.dumps, marshal.loads, data, "marshal", counter, 32)
-	for version in range(1, fsPacker.HIGHEST_VERSION + 1):
+	for version in range(2, fsPacker.HIGHEST_VERSION + 1):
 		benchmark(
 			partial(fsPacker.dumps, version=version),
 			fsPacker.loads,

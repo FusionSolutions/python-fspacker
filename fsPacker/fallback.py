@@ -291,7 +291,7 @@ class Unpacker_ver2(_OP_CODES_ver2):
 		self.stack -= 1
 		return r
 
-def loads(data:bytes, maxDictSize:int=0, maxOPSize:int=0, maxIndexSize:int=0, recursiveLimit:int=512) -> Tuple[int, Any]:
+def loads(data:bytes, maxIndexSize:int=0, recursiveLimit:int=512) -> Tuple[int, Any]:
 	if type(data) is not bytes:
 		raise UnpackingError("Only bytes can be unpacked, not {}".format(type(data)))
 	if len(data) == 0:
@@ -300,7 +300,7 @@ def loads(data:bytes, maxDictSize:int=0, maxOPSize:int=0, maxIndexSize:int=0, re
 		return 2, Unpacker_ver2(maxIndexSize, recursiveLimit).loads(data[1:])
 	raise UnpackingError("Unsupported packer version: {}".format(data[0]))
 
-def load(file:IO[bytes], maxDictSize:int=0, maxOPSize:int=0, maxIndexSize:int=0, recursiveLimit:int=512) -> Tuple[int, Any]:
+def load(file:IO[bytes], maxIndexSize:int=0, recursiveLimit:int=512) -> Tuple[int, Any]:
 	if not hasattr(file, "read"):
 		raise UnpackingError("Stream does not have read method")
 	version = file.read(1)

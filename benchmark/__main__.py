@@ -52,10 +52,12 @@ def startBatch(i:int, data:Any, counter:int) -> None:
 				32,
 			)
 	print("")
-	
-data = deepcopy(pickle.loads(zlib.decompress(open("{}/testData1.dat".format(dirname(__file__)), 'rb').read())))
+
+with open("{}/testData1.dat".format(dirname(__file__)), 'rb') as fid:
+	data = deepcopy(pickle.loads(zlib.decompress(fid.read())))
 startBatch(1, data, 1)
-data = deepcopy(pickle.loads(zlib.decompress(open("{}/testData2.dat".format(dirname(__file__)), 'rb').read())))
+with open("{}/testData2.dat".format(dirname(__file__)), 'rb') as fid:
+	data = deepcopy(pickle.loads(zlib.decompress(fid.read())))
 startBatch(2, data, 1)
 data = deepcopy([data, {"data":(data, data)}])
 startBatch(3, data, 1)

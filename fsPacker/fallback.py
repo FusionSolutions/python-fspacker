@@ -257,7 +257,7 @@ class Unpacker_ver2(_OP_CODES_ver2):
 		elif op == self.OP_NEG_CHAR_INTERGER:
 			r = -int.from_bytes(self._read(1), "little")
 		elif op == self.OP_SHORT_INTERGER:
-			r = -int.from_bytes(self._read(2), "little")
+			r = int.from_bytes(self._read(2), "little")
 		elif op == self.OP_NEG_SHORT_INTERGER:
 			r = -int.from_bytes(self._read(2), "little")
 		elif op == self.OP_INTERGER:

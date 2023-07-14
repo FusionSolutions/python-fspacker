@@ -24,6 +24,7 @@ class FSPackerTest(unittest.TestCase):
 		-1,
 		1,
 		1<<256,
+		-(1<<256),
 		0.0,
 		0.1,
 		-0.1,
@@ -43,8 +44,8 @@ class FSPackerTest(unittest.TestCase):
 		tuple(),
 		dict(),
 		{"data":"ok"},
-		{1:1},
-		{(1,2,3):1},
+		{None:0, 0:3, -1:4, 1:5, 255:6, -255:7, 0xFFFFFF:8, -0xFFFFFF:9, (1,2):10, 0.1:11, -0.1:12, float("inf"):13, \
+		float("-inf"):14, "":15, "a":16, b"":17, b"a":18 },
 		set(),
 		set([1, "a", "test", "b", b"\x00"]),
 		"F"*65000,

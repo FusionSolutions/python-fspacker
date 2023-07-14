@@ -877,15 +877,11 @@ static int _fspacker_packer_ver2_int(packerObject_ver2 *self, PyObject *obj) {
 		return _fspacker_buffer_append(self->output, &VER2_OP_ZERO_INTERGER, 1);
 	}
 	int isNeg = sign<0;
-	Py_ssize_t nbits = _PyLong_NumBits(obj);
-	Py_ssize_t nbytes = (nbits >> 3)+1;
-	if (nbytes > ITEM_LIMIT) {
-		PyErr_SetString(self->module->PackingError, "Too big integer to pack");
-		return -1;
-	}
 	PyObject *absVal = NULL;
 	unsigned char *pdata = NULL;
 	PyObject *repr = NULL;
+	Py_ssize_t nbits = 0;
+	Py_ssize_t nbytes = 0;
 	switch (_fspacker_packer_ver2_register(self, obj)) {
 		case 1:
 			goto done;
@@ -894,17 +890,44 @@ static int _fspacker_packer_ver2_int(packerObject_ver2 *self, PyObject *obj) {
 		case -1:
 			return -1;
 	}
-	repr = PyBytes_FromStringAndSize(NULL, nbytes);
-	if (repr == NULL) {
-		goto memoryError;
+	if ( isNeg ) {
+		absVal = PyNumber_Absolute(obj);
+		if ( absVal == NULL ) {
+			goto memoryError;
+		}
+		nbits = _PyLong_NumBits(absVal);
+		nbytes = (nbits >> 3)+1;
+		if (nbytes > ITEM_LIMIT) {
+			PyErr_SetString(self->module->PackingError, "Too big integer to pack");
+			goto error;
+		}
+		repr = PyBytes_FromStringAndSize(NULL, nbytes);
+		if (repr == NULL) {
+			goto memoryError;
+		}
+		pdata = (unsigned char *)PyBytes_AS_STRING(repr);
+		Py_DECREF(repr);
+		if (_PyLong_AsByteArray((PyLongObject *)(absVal), pdata, nbytes, 1, 0) < 0) {
+			goto memoryError;
+		}
+		Py_DECREF(absVal);
+	} else {
+		nbits = _PyLong_NumBits(obj);
+		nbytes = (nbits >> 3)+1;
+		if (nbytes > ITEM_LIMIT) {
+			PyErr_SetString(self->module->PackingError, "Too big integer to pack");
+			goto error;
+		}
+		repr = PyBytes_FromStringAndSize(NULL, nbytes);
+		if (repr == NULL) {
+			goto memoryError;
+		}
+		pdata = (unsigned char *)PyBytes_AS_STRING(repr);
+		Py_DECREF(repr);
+		if (_PyLong_AsByteArray((PyLongObject *)(obj), pdata, nbytes, 1, 0) < 0) {
+			goto memoryError;
+		}
 	}
-	pdata = (unsigned char *)PyBytes_AS_STRING(repr);
-	Py_DECREF(repr);
-	absVal = isNeg ? PyNumber_Absolute(obj):NULL;
-	if (_PyLong_AsByteArray((PyLongObject *)(absVal != NULL ? absVal:obj), pdata, nbytes, 1, 0) < 0) {
-		goto memoryError;
-	}
-	Py_XDECREF(absVal);
 	if ((nbytes*8)-nbits >= 8 ) {
 		nbytes -= 1;
 	}
